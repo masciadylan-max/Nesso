@@ -35,15 +35,31 @@ function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
 
 export default function App() {
   const [view, setView]             = useState('onboarding');
-  const [pov, setPov]               = useState('lucas');
-  const [actifs, setActifs]         = useState(ACTIFS);
-  const [userProfile, setUserProfile] = useState(null);
+  const [userProfile, setUserProfile] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('nesso_user_profile')) || null; } catch { return null; }
+  });
+  const [pov, setPov] = useState(() => localStorage.getItem('nesso_user_profile') ? 'user' : 'lucas');
+  const [actifs, setActifs] = useState(() => {
+    try {
+      const profile = JSON.parse(localStorage.getItem('nesso_user_profile'));
+      if (profile?.actifs?.length > 0) {
+        const userActifs = profile.actifs.filter(a => a.valeur > 0).map((a, i) => ({
+          id: 1000 + i, nom: a.nom, categorie: a.categorie || 'financier',
+          valeur: a.valeur, type: a.type || 'Non précisé', pays: a.pays || 'France',
+          proprietaires: ['user'], credit: false, note: null, beneficiaire: null,
+        }));
+        return [...ACTIFS, ...userActifs];
+      }
+    } catch {}
+    return ACTIFS;
+  });
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey]         = useState(() => localStorage.getItem('nesso_api_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '');
 
   const handleComplete = (userData) => {
     if (userData && userData.actifs?.length > 0) {
       setUserProfile(userData);
+      localStorage.setItem('nesso_user_profile', JSON.stringify(userData));
       const userActifs = userData.actifs
         .filter(a => a.valeur > 0)
         .map((a, i) => ({

@@ -75,8 +75,24 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [msgCount, setMsgCount] = useState(0);
   const endRef = useRef(null);
+
+  // Restaurer la conversation depuis localStorage au montage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nesso_messages');
+      if (saved) {
+        const msgs = JSON.parse(saved);
+        if (msgs.length > 1) {
+          setMessages(msgs);
+          setStarted(true);
+          setMsgCount(msgs.filter(m => m.role === 'user').length);
+        }
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -142,6 +158,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
       const reply = await getReply(history, newCount);
       const updatedHistory = [...history, { role: 'assistant', content: reply }];
       setMessages(updatedHistory);
+      localStorage.setItem('nesso_messages', JSON.stringify(updatedHistory));
       if (reply.includes('tableau de bord') || reply.includes('profil est prêt') || reply.includes('bilan est prêt')) {
         complete(updatedHistory);
       }
@@ -155,13 +172,19 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     await send('Je ne sais pas, je passerai cette question');
   };
 
-  const handlePasserDashboard = async () => {
-    if (isDemoMode) {
-      onComplete(null);
-      return;
-    }
-    const userData = await extractUserData(messages);
+  const handleMettreAJour = async () => {
+    if (updating || loading) return;
+    setUpdating(true);
+    const userData = isDemoMode ? null : await extractUserData(messages);
     onComplete(userData);
+    setUpdating(false);
+  };
+
+  const handleNouvelleConversation = () => {
+    localStorage.removeItem('nesso_messages');
+    setMessages([]);
+    setMsgCount(0);
+    setStarted(false);
   };
 
   return (
@@ -255,8 +278,11 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
                 placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'Inter, sans-serif' }} />
               <button className="btn-navy" onClick={() => send()} disabled={loading || !input.trim()} style={{ padding: '10px 18px' }}>→</button>
             </div>
-            <div style={{ textAlign: 'center', paddingBottom: 12 }}>
-              <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Passer → voir le tableau de bord</button>
+            <div style={{ textAlign: 'center', paddingBottom: 12, display: 'flex', justifyContent: 'center', gap: 16 }}>
+              <button onClick={handleMettreAJour} disabled={updating || loading} style={{ background: 'none', border: 'none', color: updating ? '#C9A96E' : '#1B2B4B', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
+                {updating ? '⏳ Mise à jour...' : '📊 Mettre à jour mon tableau →'}
+              </button>
+              <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Nouvelle conversation</button>
             </div>
           </div>
         )}
