@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: #F5F0EA;
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  color: #2C2C2C;
+}
+
+.font-serif { font-family: 'Playfair Display', serif; }
+
+.card {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 2px 16px rgba(27,43,75,0.07);
+}
+
+.btn-navy {
+  background: #1B2B4B;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 9px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-navy:hover { background: #243761; }
+.btn-navy:disabled { opacity: 0.45; cursor: default; }
+
+.btn-gold {
+  background: #C9A96E;
+  color: white;
+  padding: 10px 20px;
+  border-radius: 9px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-gold:hover { background: #b8966a; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.35s ease forwards; }
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #ede8e1 25%, #e3ddd6 50%, #ede8e1 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.6s infinite;
+  border-radius: 6px;
+}
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%           { transform: translateY(-5px); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #F5F0EA; }
+::-webkit-scrollbar-thumb { background: #C9A96E; border-radius: 3px; }
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: #C9A96E !important;
+  box-shadow: 0 0 0 3px rgba(201,169,110,0.15);
+}
