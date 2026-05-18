@@ -29,6 +29,47 @@ ALERTES :
 
 Commence par te présenter et poser la première question sur le niveau de connaissance.`;
 
+const extractUserData = async (history) => {
+  if (history.length < 3) return null;
+  try {
+    const res = await fetch('/anthropic/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 700,
+        system: 'Tu es un extracteur de données JSON. Réponds UNIQUEMENT avec le JSON demandé, sans markdown ni explication.',
+        messages: [
+          ...history,
+          { role: 'user', content: `Extrais les informations patrimoniales mentionnées dans notre conversation en JSON strict :
+{
+  "prenom": "prénom si mentionné sinon Utilisateur",
+  "age": null,
+  "profession": null,
+  "regime": null,
+  "enfants": 0,
+  "actifs": [
+    {"nom": "nom", "categorie": "immobilier|financier|professionnel|exotique", "valeur": 0, "type": "Résidence principale|Assurance-vie|Liquidités|Société|etc", "pays": "France"}
+  ],
+  "objectifs": "résumé en 1 phrase ou null",
+  "score": 60,
+  "alertes": []
+}
+- valeur = 0 si non mentionnée
+- score entre 30 (peu de risques) et 90 (risques élevés)
+- inclure UNIQUEMENT les actifs réellement mentionnés` }
+        ]
+      })
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = data.content[0].text.trim();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) return JSON.parse(jsonMatch[0]);
+  } catch (e) { console.error('Extraction error:', e); }
+  return null;
+};
+
 export default function Onboarding({ onComplete, apiKey, onApiKey }) {
   const [started, setStarted]   = useState(false);
   const [messages, setMessages] = useState([]);
@@ -63,6 +104,17 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     return callApi(history);
   };
 
+  const complete = (updatedHistory) => {
+    setTimeout(async () => {
+      if (isDemoMode) {
+        onComplete(null);
+        return;
+      }
+      const userData = await extractUserData(updatedHistory);
+      onComplete(userData);
+    }, 1800);
+  };
+
   const start = async () => {
     setStarted(true);
     setLoading(true);
@@ -76,9 +128,10 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     } finally { setLoading(false); }
   };
 
-  const send = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg = { role: 'user', content: input.trim() };
+  const send = async (overrideText) => {
+    const text = overrideText ?? input.trim();
+    if (!text || loading) return;
+    const userMsg = { role: 'user', content: text };
     const history = [...messages, userMsg];
     setMessages(history);
     setInput('');
@@ -87,14 +140,28 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     setMsgCount(newCount);
     try {
       const reply = await getReply(history, newCount);
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      const updatedHistory = [...history, { role: 'assistant', content: reply }];
+      setMessages(updatedHistory);
       if (newCount >= 7 || reply.includes('tableau de bord') || reply.includes('profil est prêt')) {
-        setTimeout(onComplete, 1800);
+        complete(updatedHistory);
       }
     } catch (e) {
       console.error('Nesso API error:', e);
       setMessages(prev => [...prev, { role: 'assistant', content: `Erreur : ${e.message}. Réessayez ou passez directement à la démo.` }]);
     } finally { setLoading(false); }
+  };
+
+  const handleSkip = async () => {
+    await send('Je ne sais pas, je passerai cette question');
+  };
+
+  const handlePasserDashboard = async () => {
+    if (isDemoMode) {
+      onComplete(null);
+      return;
+    }
+    const userData = await extractUserData(messages);
+    onComplete(userData);
   };
 
   return (
@@ -126,7 +193,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
               <button className="btn-navy" onClick={start} style={{ width: '100%', padding: '14px', fontSize: 15 }}>
                 {isDemoMode ? 'Démarrer la démo →' : 'Commencer l\'audit →'}
               </button>
-              <button onClick={onComplete} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'Inter, sans-serif' }}>
+              <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'Inter, sans-serif' }}>
                 Passer et voir le tableau de bord →
               </button>
             </div>
@@ -170,13 +237,23 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
               <div ref={endRef} />
             </div>
 
+            {messages.length > 1 && !loading && (
+              <div style={{ paddingLeft: 14, paddingRight: 14, paddingTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <button onClick={handleSkip} style={{ background: 'none', border: '1px solid #E5E7EB', color: '#9CA3AF', borderRadius: 20, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#C9A96E'; e.currentTarget.style.color = '#C9A96E'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.color = '#9CA3AF'; }}>
+                  Je ne sais pas / passer pour l'instant
+                </button>
+              </div>
+            )}
+
             <div style={{ borderTop: '1px solid #F5F0EA', padding: 14, display: 'flex', gap: 9 }}>
               <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
                 placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'Inter, sans-serif' }} />
-              <button className="btn-navy" onClick={send} disabled={loading || !input.trim()} style={{ padding: '10px 18px' }}>→</button>
+              <button className="btn-navy" onClick={() => send()} disabled={loading || !input.trim()} style={{ padding: '10px 18px' }}>→</button>
             </div>
             <div style={{ textAlign: 'center', paddingBottom: 12 }}>
-              <button onClick={onComplete} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Passer → voir le tableau de bord</button>
+              <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Passer → voir le tableau de bord</button>
             </div>
           </div>
         )}

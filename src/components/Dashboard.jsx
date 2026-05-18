@@ -3,15 +3,61 @@ import { CALCULS, ACTIONS } from '../data.js';
 import { euro, getPersonne, getPatrimoine } from '../utils.js';
 import { Badge, Skeleton, Modal } from './Shared.jsx';
 
-export default function Dashboard({ pov, actifs }) {
+const computeUserCalculs = (patrimoine, userProfile) => {
+  const abattement = 200000;
+  const taxable = Math.max(0, patrimoine - abattement);
+  const taux = taxable < 50000 ? 0.08 : taxable < 200000 ? 0.18 : taxable < 500000 ? 0.25 : 0.30;
+  const droitsStatusQuo = Math.round(taxable * taux);
+  const droitsOptimise = Math.round(droitsStatusQuo * 0.15);
+  const totalImpots = Math.round(patrimoine * 0.012);
+  return {
+    droits: { statusQuo: droitsStatusQuo, optimise: droitsOptimise },
+    economieSuccession: Math.max(0, droitsStatusQuo - droitsOptimise),
+    impots: { IR: Math.round(totalImpots * 0.65), IFI: patrimoine > 1300000 ? Math.round((patrimoine - 800000) * 0.005) : 0, PS: Math.round(totalImpots * 0.35), total: totalImpots },
+    economiesAnnuelles: Math.round(totalImpots * 0.18),
+    gainDixAns: Math.round(totalImpots * 1.8),
+    score: userProfile?.score || 60,
+    successionEstimee: Math.round(patrimoine * 0.65),
+  };
+};
+
+const generateUserActions = (userProfile, patrimoine) => {
+  const actions = [];
+  const alertes = userProfile?.alertes || [];
+
+  if (alertes.some(a => a.toLowerCase().includes('ifi')) || patrimoine > 1300000) {
+    actions.push({ urgence: 'rouge', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés.', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois' });
+  }
+  if (alertes.some(a => a.toLowerCase().includes('étranger') || a.toLowerCase().includes('international'))) {
+    actions.push({ urgence: 'rouge', titre: 'Anticiper la fiscalité internationale', description: 'Un bien étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès.', economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois' });
+  }
+  if (!userProfile?.regime) {
+    actions.push({ urgence: 'orange', titre: 'Clarifier votre régime matrimonial', description: 'Le régime matrimonial (communauté, séparation, participation) conditionne toute la transmission patrimoniale. Sans contrat, vous êtes en communauté légale — ce qui peut créer des situations défavorables en cas de décès.', economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois' });
+  }
+  if (patrimoine > 0) {
+    actions.push({ urgence: 'vert', titre: 'Ouvrir ou alimenter une assurance-vie', description: 'L\'assurance-vie est le levier d\'optimisation successorale le plus puissant en France : 152 500€ par bénéficiaire hors succession avant 70 ans. Plus tôt vous commencez, plus l\'abattement est exploitable.', economieLabel: `Jusqu'à 152 500€ par bénéficiaire hors succession`, economie: 152500, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois' });
+  }
+  if (userProfile?.objectifs) {
+    actions.push({ urgence: 'vert', titre: 'Compléter votre audit avec un notaire', description: `Sur la base de vos objectifs (${userProfile.objectifs}), un notaire peut formaliser une stratégie patrimoniale complète : donations, testament, mandats de protection. Coût souvent récupéré dès la première optimisation.`, economieLabel: 'Stratégie personnalisée', economie: 0, coutLabel: '~500€ (consultation)', cout: 500, delai: '6–12 mois' });
+  }
+  if (actions.length === 0) {
+    actions.push({ urgence: 'vert', titre: 'Compléter votre profil patrimonial', description: 'Pour des recommandations personnalisées et précises, revenez à l\'onboarding et répondez aux questions sur votre situation. Plus vous donnez d\'informations, plus les calculs seront précis.', economieLabel: 'Recommandations sur mesure', economie: 0, coutLabel: 'Gratuit', cout: 0, delai: 'Dès maintenant' });
+  }
+  return actions.slice(0, 3);
+};
+
+export default function Dashboard({ pov, actifs, userProfile }) {
   const [tab, setTab] = useState('succession');
   const [selectedAction, setSelectedAction] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const person   = getPersonne(pov);
-  const calculs  = CALCULS[pov] || CALCULS.lucas;
-  const actions  = ACTIONS[pov]  || ACTIONS.lucas;
+  const isUserPov = pov === 'user' && userProfile;
+  const person = isUserPov
+    ? { prenom: userProfile.prenom || 'Vous', age: userProfile.age, role: 'Utilisateur', profession: userProfile.profession }
+    : getPersonne(pov);
   const patrimoine = getPatrimoine(pov, actifs);
+  const calculs = isUserPov ? computeUserCalculs(patrimoine, userProfile) : (CALCULS[pov] || CALCULS.lucas);
+  const actions = isUserPov ? generateUserActions(userProfile, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
 
   useEffect(() => {
     setLoading(true);

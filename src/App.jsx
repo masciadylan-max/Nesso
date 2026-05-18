@@ -37,14 +37,38 @@ export default function App() {
   const [view, setView]             = useState('onboarding');
   const [pov, setPov]               = useState('lucas');
   const [actifs, setActifs]         = useState(ACTIFS);
+  const [userProfile, setUserProfile] = useState(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey, setApiKey]         = useState(() => localStorage.getItem('nesso_api_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || '');
+
+  const handleComplete = (userData) => {
+    if (userData && userData.actifs?.length > 0) {
+      setUserProfile(userData);
+      const userActifs = userData.actifs
+        .filter(a => a.valeur > 0)
+        .map((a, i) => ({
+          id: 1000 + i,
+          nom: a.nom,
+          categorie: a.categorie || 'financier',
+          valeur: a.valeur,
+          type: a.type || 'Non précisé',
+          pays: a.pays || 'France',
+          proprietaires: ['user'],
+          credit: false,
+          note: null,
+          beneficiaire: null,
+        }));
+      setActifs(prev => [...prev.filter(a => !a.proprietaires.includes('user')), ...userActifs]);
+      setPov('user');
+    }
+    setView('dashboard');
+  };
 
   if (view === 'onboarding') {
     return (
       <>
         <Onboarding
-          onComplete={() => setView('dashboard')}
+          onComplete={handleComplete}
           apiKey={apiKey}
           onApiKey={() => setShowApiKey(true)}
         />
@@ -57,7 +81,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', background: '#F5F0EA' }}>
       <Navbar view={view} setView={setView} pov={pov} setPov={setPov} onApiKey={() => setShowApiKey(true)} onReset={() => setView('onboarding')} />
       <main>
-        {view === 'dashboard' && <Dashboard pov={pov} actifs={actifs} />}
+        {view === 'dashboard' && <Dashboard pov={pov} actifs={actifs} userProfile={userProfile} />}
         {view === 'famille'   && <Famille   pov={pov} setPov={setPov} actifs={actifs} />}
         {view === 'actifs'    && <Actifs    pov={pov} actifs={actifs} setActifs={setActifs} />}
         {view === 'aide'      && <Aide      pov={pov} apiKey={apiKey} actifs={actifs} />}
