@@ -142,7 +142,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
       const reply = await getReply(history, newCount);
       const updatedHistory = [...history, { role: 'assistant', content: reply }];
       setMessages(updatedHistory);
-      if (newCount >= 7 || reply.includes('tableau de bord') || reply.includes('profil est prêt')) {
+      if (reply.includes('tableau de bord') || reply.includes('profil est prêt') || reply.includes('bilan est prêt')) {
         complete(updatedHistory);
       }
     } catch (e) {
@@ -194,8 +194,11 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
                 {isDemoMode ? 'Démarrer la démo →' : 'Commencer l\'audit →'}
               </button>
               <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'Inter, sans-serif' }}>
-                Passer et voir le tableau de bord →
+                Voir l'exemple sans remplir →
               </button>
+              <p style={{ color: '#C9B89A', fontSize: 11, margin: 0, lineHeight: 1.5 }}>
+                Vous pouvez explorer le tableau de bord avec une famille fictive, sans répondre aux questions.
+              </p>
             </div>
           </div>
         ) : (
