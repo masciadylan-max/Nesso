@@ -54,7 +54,7 @@ export default function App() {
     return ACTIFS;
   });
   const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKey, setApiKey]         = useState(() => localStorage.getItem('nesso_api_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_HAS_API || '');
+  const [apiKey, setApiKey]         = useState(() => localStorage.getItem('nesso_api_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || (window.location.hostname !== 'localhost' ? 'proxy' : ''));
 
   const handleComplete = (userData) => {
     if (userData && userData.actifs?.length > 0) {
