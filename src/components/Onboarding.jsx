@@ -79,21 +79,6 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
   const [msgCount, setMsgCount] = useState(0);
   const endRef = useRef(null);
 
-  // Restaurer la conversation depuis localStorage au montage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('nesso_messages');
-      if (saved) {
-        const msgs = JSON.parse(saved);
-        if (msgs.length > 1) {
-          setMessages(msgs);
-          setStarted(true);
-          setMsgCount(msgs.filter(m => m.role === 'user').length);
-        }
-      }
-    } catch {}
-  }, []);
-
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const isDemoMode = !apiKey;
