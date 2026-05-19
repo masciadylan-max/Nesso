@@ -172,6 +172,10 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     setStarted(false);
   };
 
+  const handlePasserDashboard = () => {
+    onComplete(null);
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ maxWidth: 620, width: '100%' }}>
