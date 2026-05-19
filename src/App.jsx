@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ACTIFS } from './data.js';
 import Navbar from './components/Navbar.jsx';
 import Dashboard from './components/Dashboard.jsx';
@@ -35,26 +35,32 @@ function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
 
 export default function App() {
   const [view, setView]             = useState('onboarding');
-  const [userProfile, setUserProfile] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('nesso_user_profile')) || null; } catch { return null; }
+  const [userProfile, setUserProfile] = useState(null);
+  const [pov, setPov]               = useState('lucas');
+  const [actifs, setActifs]         = useState(ACTIFS);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKey, setApiKey]         = useState(() => {
+    try { return localStorage.getItem('nesso_api_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || (window.location.hostname !== 'localhost' ? 'proxy' : ''); } catch { return 'proxy'; }
   });
-  const [pov, setPov] = useState(() => localStorage.getItem('nesso_user_profile') ? 'user' : 'lucas');
-  const [actifs, setActifs] = useState(() => {
+
+  // Restaurer le profil utilisateur depuis localStorage après montage
+  useEffect(() => {
     try {
-      const profile = JSON.parse(localStorage.getItem('nesso_user_profile'));
+      const saved = localStorage.getItem('nesso_user_profile');
+      if (!saved) return;
+      const profile = JSON.parse(saved);
       if (profile?.actifs?.length > 0) {
+        setUserProfile(profile);
         const userActifs = profile.actifs.filter(a => a.valeur > 0).map((a, i) => ({
           id: 1000 + i, nom: a.nom, categorie: a.categorie || 'financier',
           valeur: a.valeur, type: a.type || 'Non précisé', pays: a.pays || 'France',
           proprietaires: ['user'], credit: false, note: null, beneficiaire: null,
         }));
-        return [...ACTIFS, ...userActifs];
+        setActifs([...ACTIFS, ...userActifs]);
+        setPov('user');
       }
     } catch {}
-    return ACTIFS;
-  });
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKey, setApiKey]         = useState(() => localStorage.getItem('nesso_api_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || (window.location.hostname !== 'localhost' ? 'proxy' : ''));
+  }, []);
 
   const handleComplete = (userData) => {
     if (userData && userData.actifs?.length > 0) {
