@@ -30,6 +30,8 @@ APPROFONDISSEMENT :
 
 CONCLUSION (après 10+ échanges) : résume la situation, puis dis exactement : "Je transmets ces données à notre moteur d'analyse — Nesso compile les règles successorales françaises et les stratégies de centaines de dossiers pour un plan niveau family office. Votre tableau de bord personnalisé est prêt."
 
+SIGNAL DE FIN : quand tu envoies ton message de conclusion finale, ajoute exactement `[AUDIT_COMPLET]` à la toute fin de ton message (invisible pour l'utilisateur, retiré automatiquement). N'utilise ce signal qu'une seule fois, uniquement pour le message de conclusion.
+
 Commence : présente-toi brièvement et demande le niveau de connaissance.`;
 
 const extractUserData = async (history) => {
@@ -149,14 +151,12 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     const newCount = msgCount + 1;
     setMsgCount(newCount);
     try {
-      const reply = await getReply(history, newCount);
+      const rawReply = await getReply(history, newCount);
+      const auditTermine = rawReply.includes('[AUDIT_COMPLET]');
+      const reply = rawReply.replace('[AUDIT_COMPLET]', '').trim();
       const updatedHistory = [...history, { role: 'assistant', content: reply }];
       setMessages(updatedHistory);
       localStorage.setItem('nesso_messages', JSON.stringify(updatedHistory));
-      const replyLower = reply.toLowerCase();
-      const motsCloture = ['est prêt', 'sont prêtes', 'est terminé', 'est complété', 'voici votre', 'vous pouvez'];
-      const motsResultat = ['tableau de bord', 'bilan', 'recommandations', 'analyse', 'plan patrimonial'];
-      const auditTermine = motsCloture.some(m => replyLower.includes(m)) && motsResultat.some(m => replyLower.includes(m));
       if (auditTermine) {
         complete(updatedHistory);
       }
