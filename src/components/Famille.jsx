@@ -3,11 +3,93 @@ import { FAMILLE, ACTIONS } from '../data.js';
 import { euro, getPersonne, getPatrimoine, getActifsByOwner, getAlerts } from '../utils.js';
 import { Badge } from './Shared.jsx';
 
-export default function Famille({ pov, setPov, actifs }) {
+export default function Famille({ pov, setPov, actifs, userProfile }) {
   const [selected, setSelected] = useState(null);
   const toggle = (id) => setSelected(selected === id ? null : id);
 
   const gen = [0, 1, 2].map(g => FAMILLE.filter(p => p.generation === g));
+
+  // Vue personnalisée quand l'utilisateur a fait l'onboarding
+  if (pov === 'user' && userProfile) {
+    const userActifs = getActifsByOwner('user', actifs);
+    const userPatrimoine = getPatrimoine('user', actifs);
+    const hasFamily = userProfile.conjoint || (userProfile.enfants_prenoms?.length > 0);
+    return (
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 24px 100px' }} className="fade-in">
+        <div style={{ marginBottom: 32 }}>
+          <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Ma famille</p>
+          <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, margin: 0 }}>Votre situation familiale</h1>
+          <p style={{ color: '#9CA3AF', marginTop: 6, fontSize: 14 }}>Basé sur vos réponses lors de l'audit</p>
+        </div>
+        <div className="card" style={{ padding: 32, marginBottom: 22 }}>
+          {/* User + conjoint */}
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+            <div style={{ textAlign: 'center', minWidth: 130 }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 22, margin: '0 auto 12px' }}>
+                {(userProfile.prenom || 'V')[0].toUpperCase()}
+              </div>
+              <p style={{ fontWeight: 700, color: '#1B2B4B', fontSize: 16, margin: '0 0 3px' }}>{userProfile.prenom || 'Vous'}</p>
+              <p style={{ color: '#C9A96E', fontSize: 12, margin: '0 0 4px', fontWeight: 500 }}>Vous</p>
+              {userProfile.age && <p style={{ color: '#9CA3AF', fontSize: 12, margin: '0 0 2px' }}>{userProfile.age} ans</p>}
+              {userProfile.profession && <p style={{ color: '#9CA3AF', fontSize: 12, margin: 0 }}>{userProfile.profession}</p>}
+              {userPatrimoine > 0 && <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 14, marginTop: 8 }}>{euro(userPatrimoine)}</p>}
+            </div>
+            {userProfile.conjoint && (
+              <>
+                <div style={{ color: '#C9A96E', fontSize: 28, fontWeight: 300 }}>⸺</div>
+                <div style={{ textAlign: 'center', minWidth: 130 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 22, margin: '0 auto 12px' }}>
+                    {userProfile.conjoint[0].toUpperCase()}
+                  </div>
+                  <p style={{ fontWeight: 700, color: '#1B2B4B', fontSize: 16, margin: '0 0 3px' }}>{userProfile.conjoint}</p>
+                  <p style={{ color: '#9CA3AF', fontSize: 12, margin: 0 }}>Conjoint(e)</p>
+                  {userProfile.regime && <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 4 }}>{userProfile.regime}</p>}
+                </div>
+              </>
+            )}
+          </div>
+          {/* Enfants */}
+          {userProfile.enfants_prenoms?.length > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '24px 0 0' }}>
+                <div style={{ width: 2, height: 32, background: '#C9A96E' }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 20, flexWrap: 'wrap' }}>
+                {userProfile.enfants_prenoms.map((prenom, i) => (
+                  <div key={i} style={{ textAlign: 'center', minWidth: 100 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F5F0EA', border: '2px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1B2B4B', fontWeight: 700, fontSize: 18, margin: '0 auto 8px' }}>
+                      {prenom[0].toUpperCase()}
+                    </div>
+                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{prenom}</p>
+                    <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>Enfant</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {!hasFamily && (
+            <p style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 13, marginTop: 20, fontStyle: 'italic' }}>
+              Refaites l'audit et mentionnez les prénoms de vos proches pour enrichir cet arbre.
+            </p>
+          )}
+        </div>
+        {userActifs.length > 0 && (
+          <div className="card" style={{ padding: 28 }}>
+            <h3 style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 18, marginBottom: 16 }}>Vos actifs déclarés</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }}>
+              {userActifs.map(a => (
+                <div key={a.id} style={{ background: '#F9FAFB', borderRadius: 9, padding: 14 }}>
+                  <p style={{ fontWeight: 500, fontSize: 14, color: '#2C2C2C', margin: '0 0 4px' }}>{a.nom}</p>
+                  <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 17, margin: '0 0 4px' }}>{euro(a.valeur)}</p>
+                  <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>{a.type}{a.pays ? ` · ${a.pays}` : ''}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const MemberCard = ({ p }) => {
     const patrimoine = getPatrimoine(p.id, actifs);

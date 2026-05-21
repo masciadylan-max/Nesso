@@ -129,6 +129,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     return callApi(history);
   };
 
+  const PROFIL_VIDE = { prenom: 'Vous', conjoint: null, enfants_prenoms: [], actifs: [], alertes: [], score: 60, objectifs: null };
+
   const complete = (updatedHistory) => {
     setTimeout(async () => {
       if (isDemoMode) {
@@ -136,7 +138,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
         return;
       }
       const userData = await extractUserData(updatedHistory);
-      onComplete(userData);
+      // Si extraction échoue, on passe quand même en mode user avec profil minimal
+      onComplete(userData || PROFIL_VIDE);
     }, 1800);
   };
 
@@ -184,8 +187,12 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
   const handleMettreAJour = async () => {
     if (updating || loading) return;
     setUpdating(true);
-    const userData = isDemoMode ? null : await extractUserData(messages);
-    onComplete(userData);
+    if (isDemoMode) {
+      onComplete(null);
+    } else {
+      const userData = await extractUserData(messages);
+      onComplete(userData || PROFIL_VIDE);
+    }
     setUpdating(false);
   };
 

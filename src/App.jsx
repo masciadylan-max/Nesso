@@ -90,7 +90,7 @@ export default function App() {
       <Navbar view={view} setView={setView} pov={pov} setPov={setPov} onApiKey={() => setShowApiKey(true)} onReset={() => setView('onboarding')} />
       <main>
         {view === 'dashboard' && <Dashboard pov={pov} actifs={actifs} userProfile={userProfile} />}
-        {view === 'famille'   && <Famille   pov={pov} setPov={setPov} actifs={actifs} />}
+        {view === 'famille'   && <Famille   pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
         {view === 'actifs'    && <Actifs    pov={pov} actifs={actifs} setActifs={setActifs} />}
         {view === 'aide'      && <Aide      pov={pov} apiKey={apiKey} actifs={actifs} />}
       </main>

@@ -34,6 +34,7 @@ export const ACTIONS = {
       coutLabel: '~2 000€ (notaire IT)',
       cout: 2000,
       delai: '< 3 mois',
+      partenaire: { nom: 'Maison Droit & Patrimoine International', type: 'Avocat fiscaliste international partenaire', disponibilite: 'Sur rendez-vous' },
     },
     {
       urgence: 'orange',
@@ -44,6 +45,7 @@ export const ACTIONS = {
       coutLabel: '125€ (enregistrement fiscal)',
       cout: 125,
       delai: '< 6 mois',
+      partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' },
     },
     {
       urgence: 'vert',
@@ -54,6 +56,7 @@ export const ACTIONS = {
       coutLabel: 'Gratuit (agent immobilier)',
       cout: 0,
       delai: '6–12 mois',
+      partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' },
     },
   ],
   mere: [
@@ -66,6 +69,7 @@ export const ACTIONS = {
       coutLabel: 'Gratuit (vérification acte)',
       cout: 0,
       delai: '< 3 mois',
+      partenaire: { nom: 'Office Notarial Beaumont', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' },
     },
     {
       urgence: 'orange',
@@ -76,6 +80,7 @@ export const ACTIONS = {
       coutLabel: '~300€ (notaire)',
       cout: 300,
       delai: '< 6 mois',
+      partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' },
     },
     {
       urgence: 'vert',
@@ -86,6 +91,7 @@ export const ACTIONS = {
       coutLabel: 'Dépend des versements',
       cout: 0,
       delai: '< 2 ans',
+      partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' },
     },
   ],
   tante: [
@@ -98,6 +104,7 @@ export const ACTIONS = {
       coutLabel: '~300€ (notaire)',
       cout: 300,
       delai: '< 3 mois',
+      partenaire: { nom: 'Office Notarial Beaumont', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' },
     },
     {
       urgence: 'orange',
@@ -108,6 +115,7 @@ export const ACTIONS = {
       coutLabel: 'Variable selon conditions',
       cout: 0,
       delai: '< 6 mois',
+      partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' },
     },
     {
       urgence: 'vert',
@@ -118,6 +126,7 @@ export const ACTIONS = {
       coutLabel: 'Dépend des versements',
       cout: 0,
       delai: '6–12 mois',
+      partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' },
     },
   ],
 };
