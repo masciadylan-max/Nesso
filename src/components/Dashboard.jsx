@@ -87,13 +87,17 @@ export default function Dashboard({ pov, actifs, userProfile }) {
 
         <div className="card" style={{ padding: 24 }}>
           <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>Patrimoine propre</p>
-          {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : (
+          {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : patrimoine > 0 ? (
             <p className="font-serif" style={{ color: '#1B2B4B', fontSize: 38, fontWeight: 700, margin: '0 0 12px' }}>{euro(patrimoine)}</p>
+          ) : (
+            <p style={{ color: '#9CA3AF', fontSize: 14, fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>Montants non précisés —<br/>les recommandations restent valides</p>
           )}
           <div style={{ borderTop: '1px solid #F5F0EA', paddingTop: 12 }}>
             <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Droit successoral estimé</p>
-            {loading ? <Skeleton h={24} w="55%" /> : (
+            {loading ? <Skeleton h={24} w="55%" /> : patrimoine > 0 ? (
               <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 20, margin: 0 }}>{euro(calculs.successionEstimee)}</p>
+            ) : (
+              <p style={{ color: '#D1C4B0', fontSize: 13, margin: 0 }}>À préciser</p>
             )}
           </div>
         </div>

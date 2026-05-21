@@ -153,7 +153,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
       const updatedHistory = [...history, { role: 'assistant', content: reply }];
       setMessages(updatedHistory);
       localStorage.setItem('nesso_messages', JSON.stringify(updatedHistory));
-      if (reply.includes('tableau de bord') || reply.includes('profil est prêt') || reply.includes('bilan est prêt')) {
+      const TRIGGERS = ['tableau de bord', 'profil est prêt', 'bilan est prêt', 'family office', 'moteur d\'analyse', 'plan sur mesure', 'recommandations sont prêtes', 'analyse est terminée', 'bilan est terminé', 'votre bilan'];
+      if (TRIGGERS.some(t => reply.toLowerCase().includes(t))) {
         complete(updatedHistory);
       }
     } catch (e) {
@@ -292,9 +293,16 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
                 placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'Inter, sans-serif' }} />
               <button className="btn-navy" onClick={() => send()} disabled={loading || !input.trim()} style={{ padding: '10px 18px' }}>→</button>
             </div>
+            {msgCount >= 6 && !updating && !loading && (
+              <div style={{ padding: '0 14px 10px' }}>
+                <button onClick={handleMettreAJour} style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 600, background: '#1B2B4B', color: '#C9A96E', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                  ✦ Générer mon tableau de bord →
+                </button>
+              </div>
+            )}
             <div style={{ textAlign: 'center', paddingBottom: 12, display: 'flex', justifyContent: 'center', gap: 16 }}>
-              <button onClick={handleMettreAJour} disabled={updating || loading} style={{ background: 'none', border: 'none', color: updating ? '#C9A96E' : '#1B2B4B', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
-                {updating ? '⏳ Mise à jour...' : '📊 Mettre à jour mon tableau →'}
+              <button onClick={handleMettreAJour} disabled={updating || loading} style={{ background: 'none', border: 'none', color: updating ? '#C9A96E' : '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+                {updating ? '⏳ Génération...' : '📊 Mettre à jour'}
               </button>
               <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Nouvelle conversation</button>
             </div>
