@@ -189,6 +189,16 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     onComplete(null);
   };
 
+  const savedMessages = (() => { try { const m = localStorage.getItem('nesso_messages'); return m ? JSON.parse(m) : null; } catch { return null; } })();
+  const hasSavedConversation = savedMessages && savedMessages.length > 4;
+
+  const handleReprendreConversation = async () => {
+    setLoading(true);
+    const userData = await extractUserData(savedMessages);
+    onComplete(userData || PROFIL_VIDE);
+    setLoading(false);
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ maxWidth: 620, width: '100%' }}>
@@ -215,15 +225,17 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {hasSavedConversation && !isDemoMode && (
+                <button onClick={handleReprendreConversation} disabled={loading} style={{ width: '100%', padding: '14px', fontSize: 15, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
+                  {loading ? '⏳ Génération de votre tableau...' : '✦ Reprendre ma dernière conversation →'}
+                </button>
+              )}
               <button className="btn-navy" onClick={start} style={{ width: '100%', padding: '14px', fontSize: 15 }}>
-                {isDemoMode ? 'Démarrer la démo →' : 'Commencer l\'audit →'}
+                {isDemoMode ? 'Démarrer la démo →' : hasSavedConversation ? 'Recommencer un nouvel audit →' : 'Commencer l\'audit →'}
               </button>
               <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'Inter, sans-serif' }}>
                 Voir l'exemple sans remplir →
               </button>
-              <p style={{ color: '#C9B89A', fontSize: 11, margin: 0, lineHeight: 1.5 }}>
-                Vous pouvez explorer le tableau de bord avec une famille fictive, sans répondre aux questions.
-              </p>
             </div>
           </div>
         ) : (
