@@ -149,9 +149,9 @@ export default function Dashboard({ pov, actifs, userProfile }) {
         <div style={{ padding: 28 }}>
           {tab === 'succession' && (
             <div className="fade-in">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 28 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
                 {[
-                  { label: 'Droits estimés — statu quo', val: calculs.droits.statusQuo, bg: '#F9FAFB', color: '#1B2B4B', sub: 'Situation actuelle' },
+                  { label: 'Droits estimés — statu quo', val: calculs.droits.statusQuo, bg: '#F9FAFB', color: '#1B2B4B', sub: 'Situation actuelle sans action' },
                   { label: 'Droits après optimisation', val: calculs.droits.optimise, bg: '#F0FDF4', color: '#16A34A', sub: 'Scénario optimisé' },
                   { label: 'Économie possible', val: calculs.economieSuccession, bg: '#FFF8F0', color: '#C9A96E', sub: 'Avec les actions recommandées', border: '1px solid #FDE8C8' },
                 ].map(({ label, val, bg, color, sub, border }) => (
@@ -162,6 +162,26 @@ export default function Dashboard({ pov, actifs, userProfile }) {
                   </div>
                 ))}
               </div>
+
+              {/* Détail par levier */}
+              <div style={{ background: '#FAFAF9', border: '1px solid #F0EBE4', borderRadius: 10, padding: 18, marginBottom: 24 }}>
+                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Comment on y arrive — détail par levier</p>
+                {actions.map((a, i) => {
+                  const urgenceColor = a.urgence === 'rouge' ? '#DC2626' : a.urgence === 'orange' ? '#D97706' : '#16A34A';
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: i < actions.length - 1 ? 10 : 0, marginBottom: i < actions.length - 1 ? 10 : 0, borderBottom: i < actions.length - 1 ? '1px dashed #EDE8E3' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1 }}>
+                        <span style={{ color: urgenceColor, fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>●</span>
+                        <span style={{ color: '#374151', fontSize: 13 }}>{a.titre}</span>
+                      </div>
+                      <span style={{ color: a.economie > 0 ? '#C9A96E' : '#9CA3AF', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {a.economie > 0 ? euro(a.economie) : a.economieLabel}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
               <div>
                 <p style={{ color: '#9CA3AF', fontSize: 13, marginBottom: 16, fontWeight: 500 }}>Comparatif visuel</p>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 32, height: 120 }}>
@@ -187,7 +207,7 @@ export default function Dashboard({ pov, actifs, userProfile }) {
 
           {tab === 'optimisation' && (
             <div className="fade-in">
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginBottom: 28 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Impôts annuels estimés', val: calculs.impots.total, suffix: '/an', color: '#1B2B4B', bg: '#F9FAFB', sub: 'IR + IFI + Prélèvements sociaux' },
                   { label: 'Économies possibles', val: calculs.economiesAnnuelles, suffix: '/an', color: '#16A34A', bg: '#F0FDF4', sub: 'Gain annuel possible' },
@@ -200,6 +220,28 @@ export default function Dashboard({ pov, actifs, userProfile }) {
                   </div>
                 ))}
               </div>
+              {/* Détail par levier — optimisation */}
+              <div style={{ background: '#FAFAF9', border: '1px solid #F0EBE4', borderRadius: 10, padding: 18, marginBottom: 20 }}>
+                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Économies possibles — détail par action</p>
+                {actions.map((a, i) => {
+                  const urgenceColor = a.urgence === 'rouge' ? '#DC2626' : a.urgence === 'orange' ? '#D97706' : '#16A34A';
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: i < actions.length - 1 ? 10 : 0, marginBottom: i < actions.length - 1 ? 10 : 0, borderBottom: i < actions.length - 1 ? '1px dashed #EDE8E3' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1 }}>
+                        <span style={{ color: urgenceColor, fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>●</span>
+                        <div>
+                          <span style={{ color: '#374151', fontSize: 13 }}>{a.titre}</span>
+                          <span style={{ color: '#9CA3AF', fontSize: 12, marginLeft: 8 }}>· coût {a.coutLabel}</span>
+                        </div>
+                      </div>
+                      <span style={{ color: a.economie > 0 ? '#16A34A' : '#9CA3AF', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {a.economie > 0 ? `+ ${euro(a.economie)}` : a.economieLabel}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 20 }}>
                   <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 14, fontWeight: 500 }}>Répartition fiscale</p>
