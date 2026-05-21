@@ -8,6 +8,12 @@ import Aide from './components/Aide.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import { Modal } from './components/Shared.jsx';
 
+const LS = {
+  get: (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch { return fallback; } },
+  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  del: (...keys) => { try { keys.forEach(k => localStorage.removeItem(k)); } catch {} },
+};
+
 function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
   const [val, setVal] = useState(apiKey || '');
   const save = () => {
@@ -34,12 +40,12 @@ function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
 }
 
 export default function App() {
-  const [view, setView]             = useState('onboarding');
-  const [pov, setPov]               = useState('lucas');
-  const [actifs, setActifs]         = useState(ACTIFS);
-  const [userProfile, setUserProfile] = useState(null);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const [apiKey, setApiKey]         = useState(() => {
+  const [view, setView]               = useState(() => LS.get('nesso_view', 'onboarding'));
+  const [pov, setPov]                 = useState(() => LS.get('nesso_pov', 'lucas'));
+  const [actifs, setActifs]           = useState(() => LS.get('nesso_user_actifs', null) ?? ACTIFS);
+  const [userProfile, setUserProfile] = useState(() => LS.get('nesso_user_profile', null));
+  const [showApiKey, setShowApiKey]   = useState(false);
+  const [apiKey, setApiKey]           = useState(() => {
     try {
       return localStorage.getItem('nesso_api_key') ||
              import.meta.env.VITE_ANTHROPIC_API_KEY ||
@@ -50,6 +56,7 @@ export default function App() {
   const handleComplete = (userData) => {
     if (userData) {
       setUserProfile(userData);
+      LS.set('nesso_user_profile', userData);
       const userActifs = (userData.actifs || [])
         .filter(a => a.valeur > 0)
         .map((a, i) => ({
@@ -64,12 +71,21 @@ export default function App() {
           note: null,
           beneficiaire: null,
         }));
-      // Remplace les données démo par les données user uniquement
       setActifs(userActifs);
+      LS.set('nesso_user_actifs', userActifs);
       setPov('user');
+      LS.set('nesso_pov', 'user');
     }
-    // Si userData est null (bouton "Voir l'exemple"), les ACTIFS démo restent intacts
     setView('dashboard');
+    LS.set('nesso_view', 'dashboard');
+  };
+
+  const handleReset = () => {
+    LS.del('nesso_view', 'nesso_pov', 'nesso_user_profile', 'nesso_user_actifs', 'nesso_messages');
+    setUserProfile(null);
+    setActifs(ACTIFS);
+    setPov('lucas');
+    setView('onboarding');
   };
 
   if (view === 'onboarding') {
@@ -87,7 +103,7 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0EA' }}>
-      <Navbar view={view} setView={setView} pov={pov} setPov={setPov} onApiKey={() => setShowApiKey(true)} onReset={() => setView('onboarding')} />
+      <Navbar view={view} setView={setView} pov={pov} setPov={setPov} onApiKey={() => setShowApiKey(true)} onReset={handleReset} />
       <main>
         {view === 'dashboard' && <Dashboard pov={pov} actifs={actifs} userProfile={userProfile} />}
         {view === 'famille'   && <Famille   pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
