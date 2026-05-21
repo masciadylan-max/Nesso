@@ -48,9 +48,9 @@ export default function App() {
   });
 
   const handleComplete = (userData) => {
-    if (userData && userData.actifs?.length > 0) {
+    if (userData) {
       setUserProfile(userData);
-      const userActifs = userData.actifs
+      const userActifs = (userData.actifs || [])
         .filter(a => a.valeur > 0)
         .map((a, i) => ({
           id: 1000 + i,
@@ -64,9 +64,11 @@ export default function App() {
           note: null,
           beneficiaire: null,
         }));
-      setActifs(prev => [...prev.filter(a => !a.proprietaires.includes('user')), ...userActifs]);
+      // Remplace les données démo par les données user uniquement
+      setActifs(userActifs);
       setPov('user');
     }
+    // Si userData est null (bouton "Voir l'exemple"), les ACTIFS démo restent intacts
     setView('dashboard');
   };
 

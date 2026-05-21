@@ -26,22 +26,22 @@ const generateUserActions = (userProfile, patrimoine) => {
   const alertes = userProfile?.alertes || [];
 
   if (alertes.some(a => a.toLowerCase().includes('ifi')) || patrimoine > 1300000) {
-    actions.push({ urgence: 'rouge', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés.', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois' });
+    actions.push({ urgence: 'rouge', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (parts de résidence principale, bois et forêts, biens professionnels).', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
   }
   if (alertes.some(a => a.toLowerCase().includes('étranger') || a.toLowerCase().includes('international'))) {
-    actions.push({ urgence: 'rouge', titre: 'Anticiper la fiscalité internationale', description: 'Un bien étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès.', economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois' });
+    actions.push({ urgence: 'rouge', titre: 'Anticiper la fiscalité internationale', description: 'Un bien étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès. Une structuration préventive peut réduire drastiquement la facture.', economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois', partenaire: { nom: 'Maison Droit & Patrimoine International', type: 'Avocat fiscaliste international partenaire', disponibilite: 'Sur rendez-vous' } });
   }
   if (!userProfile?.regime) {
-    actions.push({ urgence: 'orange', titre: 'Clarifier votre régime matrimonial', description: 'Le régime matrimonial (communauté, séparation, participation) conditionne toute la transmission patrimoniale. Sans contrat, vous êtes en communauté légale — ce qui peut créer des situations défavorables en cas de décès.', economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois' });
+    actions.push({ urgence: 'orange', titre: 'Clarifier votre régime matrimonial', description: 'Le régime matrimonial conditionne toute la transmission patrimoniale. Sans contrat de mariage, vous êtes en communauté légale réduite aux acquêts — ce qui peut créer des situations défavorables pour le conjoint survivant ou les enfants selon votre situation.', economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois', partenaire: { nom: 'Office Notarial Beaumont', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
   }
   if (patrimoine > 0) {
-    actions.push({ urgence: 'vert', titre: 'Ouvrir ou alimenter une assurance-vie', description: 'L\'assurance-vie est le levier d\'optimisation successorale le plus puissant en France : 152 500€ par bénéficiaire hors succession avant 70 ans. Plus tôt vous commencez, plus l\'abattement est exploitable.', economieLabel: `Jusqu'à 152 500€ par bénéficiaire hors succession`, economie: 152500, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois' });
+    actions.push({ urgence: 'vert', titre: 'Ouvrir ou alimenter une assurance-vie', description: 'L\'assurance-vie est le levier d\'optimisation successorale le plus puissant en France : 152 500€ par bénéficiaire hors succession avant 70 ans. La clause bénéficiaire, rédigée sur mesure, peut démultiplier cet avantage. Plus tôt vous commencez, plus l\'abattement est exploitable.', economieLabel: `Jusqu'à 152 500€ par bénéficiaire hors succession`, economie: 152500, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois', partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' } });
   }
   if (userProfile?.objectifs) {
-    actions.push({ urgence: 'vert', titre: 'Compléter votre audit avec un notaire', description: `Sur la base de vos objectifs (${userProfile.objectifs}), un notaire peut formaliser une stratégie patrimoniale complète : donations, testament, mandats de protection. Coût souvent récupéré dès la première optimisation.`, economieLabel: 'Stratégie personnalisée', economie: 0, coutLabel: '~500€ (consultation)', cout: 500, delai: '6–12 mois' });
+    actions.push({ urgence: 'vert', titre: 'Formaliser votre stratégie avec un notaire', description: `Sur la base de vos objectifs (${userProfile.objectifs}), un notaire patrimonial peut formaliser une stratégie complète : donations avec réserve d'usufruit, testament sur mesure, mandat de protection future. Le coût de la consultation est souvent récupéré dès la première optimisation réalisée.`, economieLabel: 'Stratégie patrimoniale sur mesure', economie: 0, coutLabel: '~500€ (consultation initiale)', cout: 500, delai: '6–12 mois', partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' } });
   }
   if (actions.length === 0) {
-    actions.push({ urgence: 'vert', titre: 'Compléter votre profil patrimonial', description: 'Pour des recommandations personnalisées et précises, revenez à l\'onboarding et répondez aux questions sur votre situation. Plus vous donnez d\'informations, plus les calculs seront précis.', economieLabel: 'Recommandations sur mesure', economie: 0, coutLabel: 'Gratuit', cout: 0, delai: 'Dès maintenant' });
+    actions.push({ urgence: 'vert', titre: 'Affiner votre profil patrimonial', description: 'Pour des recommandations personnalisées et des calculs précis, complétez votre profil en répondant à davantage de questions lors de l\'onboarding. Plus votre situation est détaillée, plus le plan d\'action sera ciblé et actionnable.', economieLabel: 'Recommandations sur mesure', economie: 0, coutLabel: 'Gratuit', cout: 0, delai: 'Dès maintenant', partenaire: null });
   }
   return actions.slice(0, 3);
 };
@@ -275,9 +275,20 @@ export default function Dashboard({ pov, actifs, userProfile }) {
                 <p style={{ color: '#1B2B4B', fontWeight: 700, fontSize: 17, margin: 0 }}>{selectedAction.coutLabel}</p>
               </div>
             </div>
-            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 14 }}>
+            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 14, marginBottom: selectedAction.partenaire ? 12 : 0 }}>
               <p style={{ color: '#92400E', fontSize: 13, fontWeight: 500, margin: 0 }}>⏱ Délai recommandé : {selectedAction.delai}</p>
             </div>
+            {selectedAction.partenaire && (
+              <div style={{ background: '#F5F0EA', border: '1px solid #E8DDD0', borderRadius: 8, padding: 16 }}>
+                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Partenaire recommandé par Nesso</p>
+                <p style={{ color: '#1B2B4B', fontWeight: 700, fontSize: 15, margin: '0 0 2px' }}>{selectedAction.partenaire.nom}</p>
+                <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 10px' }}>{selectedAction.partenaire.type}</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                  <span style={{ color: '#16A34A', fontSize: 12 }}>● {selectedAction.partenaire.disponibilite}</span>
+                  <button className="btn-navy" style={{ fontSize: 12, padding: '7px 14px' }}>Prendre rendez-vous →</button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </Modal>
