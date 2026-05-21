@@ -153,8 +153,11 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
       const updatedHistory = [...history, { role: 'assistant', content: reply }];
       setMessages(updatedHistory);
       localStorage.setItem('nesso_messages', JSON.stringify(updatedHistory));
-      const TRIGGERS = ['tableau de bord', 'profil est prêt', 'bilan est prêt', 'family office', 'moteur d\'analyse', 'plan sur mesure', 'recommandations sont prêtes', 'analyse est terminée', 'bilan est terminé', 'votre bilan'];
-      if (TRIGGERS.some(t => reply.toLowerCase().includes(t))) {
+      const replyLower = reply.toLowerCase();
+      const motsCloture = ['est prêt', 'sont prêtes', 'est terminé', 'est complété', 'voici votre', 'vous pouvez'];
+      const motsResultat = ['tableau de bord', 'bilan', 'recommandations', 'analyse', 'plan patrimonial'];
+      const auditTermine = motsCloture.some(m => replyLower.includes(m)) && motsResultat.some(m => replyLower.includes(m));
+      if (auditTermine) {
         complete(updatedHistory);
       }
     } catch (e) {
