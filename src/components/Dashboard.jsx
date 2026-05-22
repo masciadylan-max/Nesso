@@ -26,22 +26,22 @@ const generateUserActions = (userProfile, patrimoine) => {
   const alertes = userProfile?.alertes || [];
 
   if (alertes.some(a => a.toLowerCase().includes('ifi')) || patrimoine > 1300000) {
-    actions.push({ urgence: 'rouge', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (parts de résidence principale, bois et forêts, biens professionnels).', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
+    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité IFI', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (parts de résidence principale, bois et forêts, biens professionnels).', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', etapes: ['Lister tous vos actifs immobiliers et financiers', 'Identifier les actifs exonérés (biens pro, forêts, résidence principale à 30%)', 'Calculer le passif déductible (dettes, emprunts)', 'Mandater un fiscaliste pour sécuriser la déclaration IFI'], partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
   }
   if (alertes.some(a => a.toLowerCase().includes('étranger') || a.toLowerCase().includes('international'))) {
-    actions.push({ urgence: 'rouge', titre: 'Anticiper la fiscalité internationale', description: 'Un bien étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès. Une structuration préventive peut réduire drastiquement la facture.', economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois', partenaire: { nom: 'Maison Droit & Patrimoine International', type: 'Avocat fiscaliste international partenaire', disponibilite: 'Sur rendez-vous' } });
+    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité internationale', titre: 'Anticiper la fiscalité internationale', description: 'Un bien étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès. Une structuration préventive peut réduire drastiquement la facture.', economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois', etapes: ['Identifier la loi applicable selon UE 650/2012', 'Vérifier l\'existence d\'une convention bilatérale avec le pays concerné', 'Évaluer une structuration préventive (SCI, holding, trust)', 'Rédiger un certificat successoral européen si besoin'], partenaire: { nom: 'Maison Droit & Patrimoine International', type: 'Avocat fiscaliste international partenaire', disponibilite: 'Sur rendez-vous' } });
   }
   if (!userProfile?.regime) {
-    actions.push({ urgence: 'orange', titre: 'Clarifier votre régime matrimonial', description: 'Le régime matrimonial conditionne toute la transmission patrimoniale. Sans contrat de mariage, vous êtes en communauté légale réduite aux acquêts — ce qui peut créer des situations défavorables pour le conjoint survivant ou les enfants selon votre situation.', economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois', partenaire: { nom: 'Office Notarial Beaumont', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
+    actions.push({ urgence: 'orange', titreGenerique: 'Régime matrimonial', titre: 'Clarifier votre régime matrimonial', description: 'Le régime matrimonial conditionne toute la transmission patrimoniale. Sans contrat de mariage, vous êtes en communauté légale réduite aux acquêts — ce qui peut créer des situations défavorables pour le conjoint survivant ou les enfants selon votre situation.', economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois', etapes: ['Faire un bilan patrimonial pour identifier les risques', 'Consulter un notaire pour comparer les régimes (communauté, séparation, participation aux acquêts)', 'Signer un contrat de mariage ou un avenant', 'Homologuer si nécessaire au tribunal judiciaire'], partenaire: { nom: 'Office Notarial Beaumont', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
   }
   if (patrimoine > 0) {
-    actions.push({ urgence: 'vert', titre: 'Ouvrir ou alimenter une assurance-vie', description: 'L\'assurance-vie est le levier d\'optimisation successorale le plus puissant en France : 152 500€ par bénéficiaire hors succession avant 70 ans. La clause bénéficiaire, rédigée sur mesure, peut démultiplier cet avantage. Plus tôt vous commencez, plus l\'abattement est exploitable.', economieLabel: `Jusqu'à 152 500€ par bénéficiaire hors succession`, economie: 152500, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois', partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' } });
+    actions.push({ urgence: 'vert', titreGenerique: 'Assurance-vie', titre: 'Ouvrir ou alimenter une assurance-vie', description: 'L\'assurance-vie est le levier d\'optimisation successorale le plus puissant en France : 152 500€ par bénéficiaire hors succession avant 70 ans. La clause bénéficiaire, rédigée sur mesure, peut démultiplier cet avantage. Plus tôt vous commencez, plus l\'abattement est exploitable.', economieLabel: `Jusqu'à 152 500€ par bénéficiaire hors succession`, economie: 152500, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois', etapes: ['Ouvrir un contrat multisupport chez un assureur sérieux', 'Rédiger une clause bénéficiaire sur mesure (pas la clause standard)', 'Alimenter avant 70 ans pour bénéficier des abattements maximaux', 'Réviser la clause à chaque changement de situation familiale'], partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' } });
   }
   if (userProfile?.objectifs) {
-    actions.push({ urgence: 'vert', titre: 'Formaliser votre stratégie avec un notaire', description: `Sur la base de vos objectifs (${userProfile.objectifs}), un notaire patrimonial peut formaliser une stratégie complète : donations avec réserve d'usufruit, testament sur mesure, mandat de protection future. Le coût de la consultation est souvent récupéré dès la première optimisation réalisée.`, economieLabel: 'Stratégie patrimoniale sur mesure', economie: 0, coutLabel: '~500€ (consultation initiale)', cout: 500, delai: '6–12 mois', partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' } });
+    actions.push({ urgence: 'vert', titreGenerique: 'Stratégie notariale', titre: 'Formaliser votre stratégie avec un notaire', description: `Sur la base de vos objectifs (${userProfile.objectifs}), un notaire patrimonial peut formaliser une stratégie complète : donations avec réserve d'usufruit, testament sur mesure, mandat de protection future. Le coût de la consultation est souvent récupéré dès la première optimisation réalisée.`, economieLabel: 'Stratégie patrimoniale sur mesure', economie: 0, coutLabel: '~500€ (consultation initiale)', cout: 500, delai: '6–12 mois', etapes: ['Rassembler l\'inventaire complet du patrimoine familial', 'Consulter un notaire patrimonial pour un bilan successoral', 'Mettre en place les actes adaptés (donation, testament, mandat de protection future)', 'Planifier les donations progressives dans le temps'], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' } });
   }
   if (actions.length === 0) {
-    actions.push({ urgence: 'vert', titre: 'Affiner votre profil patrimonial', description: 'Pour des recommandations personnalisées et des calculs précis, complétez votre profil en répondant à davantage de questions lors de l\'onboarding. Plus votre situation est détaillée, plus le plan d\'action sera ciblé et actionnable.', economieLabel: 'Recommandations sur mesure', economie: 0, coutLabel: 'Gratuit', cout: 0, delai: 'Dès maintenant', partenaire: null });
+    actions.push({ urgence: 'vert', titreGenerique: 'Audit patrimonial', titre: 'Affiner votre profil patrimonial', description: 'Pour des recommandations personnalisées et des calculs précis, complétez votre profil en répondant à davantage de questions lors de l\'onboarding. Plus votre situation est détaillée, plus le plan d\'action sera ciblé et actionnable.', economieLabel: 'Recommandations sur mesure', economie: 0, coutLabel: 'Gratuit', cout: 0, delai: 'Dès maintenant', etapes: null, partenaire: null });
   }
   return actions.slice(0, 3);
 };
@@ -49,6 +49,7 @@ const generateUserActions = (userProfile, patrimoine) => {
 export default function Dashboard({ pov, actifs, userProfile }) {
   const [tab, setTab] = useState('succession');
   const [selectedAction, setSelectedAction] = useState(null);
+  const [showNessoPlus, setShowNessoPlus] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const isUserPov = pov === 'user' && userProfile;
@@ -59,13 +60,23 @@ export default function Dashboard({ pov, actifs, userProfile }) {
   const calculs = isUserPov ? computeUserCalculs(patrimoine, userProfile) : (CALCULS[pov] || CALCULS.lucas);
   const actions = isUserPov ? generateUserActions(userProfile, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
 
+  // Total toutes économies identifiées (succession + actions chiffrées)
+  const totalEconomiesActions = actions.reduce((sum, a) => sum + (a.economie > 0 ? a.economie : 0), 0);
+  const totalEconomies = Math.max(calculs.economieSuccession, totalEconomiesActions);
+
+  // Freemium — hardcodé false en V1, à connecter au vrai état d'abonnement
+  const isNessoPlus = false;
+  const NessoBadge = () => (
+    <span style={{ background: '#1B2B4B', color: '#C9A96E', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.06em', verticalAlign: 'middle', marginLeft: 6 }}>NESSO+</span>
+  );
+
   useEffect(() => {
     setLoading(true);
     const t = setTimeout(() => setLoading(false), 500);
     return () => clearTimeout(t);
   }, [pov]);
 
-  const scoreColor = calculs.score > 70 ? '#DC2626' : calculs.score > 50 ? '#D97706' : '#16A34A';
+  const scoreColor = calculs.score > 70 ? '#E24B4A' : calculs.score > 50 ? '#F59E0B' : '#10B981';
   const scoreLabel = calculs.score > 70 ? 'Risque élevé' : calculs.score > 50 ? 'Risque modéré' : 'Risque faible';
 
   return (
@@ -77,7 +88,7 @@ export default function Dashboard({ pov, actifs, userProfile }) {
         <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, fontWeight: 700, margin: 0 }}>
           Bonjour, {person?.prenom} <span style={{ color: '#C9A96E' }}>✦</span>
         </h1>
-        <p style={{ color: '#9CA3AF', marginTop: 6, fontSize: 14 }}>
+        <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>
           Situation patrimoniale au {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
         </p>
       </div>
@@ -86,14 +97,14 @@ export default function Dashboard({ pov, actifs, userProfile }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginBottom: 24 }}>
 
         <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>Patrimoine propre</p>
+          <p style={{ color: '#7A7A8C', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>Patrimoine propre</p>
           {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : patrimoine > 0 ? (
             <p className="font-serif" style={{ color: '#1B2B4B', fontSize: 38, fontWeight: 700, margin: '0 0 12px' }}>{euro(patrimoine)}</p>
           ) : (
-            <p style={{ color: '#9CA3AF', fontSize: 14, fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>Montants non précisés —<br/>les recommandations restent valides</p>
+            <p style={{ color: '#7A7A8C', fontSize: 14, fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>Montants non précisés —<br/>les recommandations restent valides</p>
           )}
           <div style={{ borderTop: '1px solid #F5F0EA', paddingTop: 12 }}>
-            <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Droit successoral estimé</p>
+            <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 4 }}>Droit successoral estimé</p>
             {loading ? <Skeleton h={24} w="55%" /> : patrimoine > 0 ? (
               <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 20, margin: 0 }}>{euro(calculs.successionEstimee)}</p>
             ) : (
@@ -103,7 +114,7 @@ export default function Dashboard({ pov, actifs, userProfile }) {
         </div>
 
         <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 14 }}>Score de risque successoral</p>
+          <p style={{ color: '#7A7A8C', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 14 }}>Score de risque successoral</p>
           {loading ? <Skeleton h={72} /> : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
               <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
@@ -117,8 +128,8 @@ export default function Dashboard({ pov, actifs, userProfile }) {
                 </div>
               </div>
               <div>
-                <p style={{ fontWeight: 600, color: '#2C2C2C', fontSize: 16, margin: '0 0 4px' }}>{scoreLabel}</p>
-                <p style={{ color: '#9CA3AF', fontSize: 12, lineHeight: 1.5, margin: 0 }}>
+                <p style={{ fontWeight: 600, color: '#1A1A2E', fontSize: 16, margin: '0 0 4px' }}>{scoreLabel}</p>
+                <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.5, margin: 0 }}>
                   {calculs.score > 70 ? 'Actions urgentes nécessaires' : calculs.score > 50 ? 'Optimisations identifiées' : 'Situation bien maîtrisée'}
                 </p>
               </div>
@@ -126,12 +137,21 @@ export default function Dashboard({ pov, actifs, userProfile }) {
           )}
         </div>
 
-        <div className="card" style={{ padding: 24, borderLeft: '4px solid #C9A96E' }}>
-          <p style={{ color: '#9CA3AF', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>Économies identifiées</p>
-          {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : (
-            <p className="font-serif" style={{ color: '#C9A96E', fontSize: 38, fontWeight: 700, margin: '0 0 12px' }}>{euro(calculs.economieSuccession)}</p>
+        <div className="card" style={{ padding: 24, borderLeft: '4px solid #C9A96E', background: 'linear-gradient(135deg, #FFFDF9 0%, #FFF8EE 100%)' }}>
+          <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10 }}>✦ Économies identifiées</p>
+          {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : totalEconomies > 0 ? (
+            <p className="font-serif" style={{ color: '#C9A96E', fontSize: 38, fontWeight: 700, margin: '0 0 6px' }}>{euro(totalEconomies)}</p>
+          ) : (
+            <p style={{ color: '#7A7A8C', fontSize: 14, fontStyle: 'italic', margin: '0 0 6px', lineHeight: 1.5 }}>Calculées selon votre situation</p>
           )}
-          <p style={{ color: '#9CA3AF', fontSize: 13, margin: 0 }}>En appliquant les {actions.length} recommandations</p>
+          <p style={{ color: '#7A7A8C', fontSize: 12, margin: '0 0 10px' }}>
+            {actions.length} recommandation{actions.length > 1 ? 's' : ''} personnalisée{actions.length > 1 ? 's' : ''}
+          </p>
+          <div style={{ borderTop: '1px solid #FDE8C8', paddingTop: 10 }}>
+            <button onClick={() => setShowNessoPlus(true)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', color: '#B8895A', fontSize: 12, fontWeight: 500 }}>
+              Voir le détail → <span style={{ color: '#C9A96E', fontWeight: 700 }}>Nesso+</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -141,8 +161,8 @@ export default function Dashboard({ pov, actifs, userProfile }) {
           {[['succession', '⚖ Succession'], ['optimisation', '📈 Optimisation fiscale']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
               padding: '14px 24px', fontSize: 14, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'none',
-              fontFamily: 'Inter, sans-serif', transition: 'all 0.2s', marginBottom: -1,
-              color: tab === id ? '#1B2B4B' : '#9CA3AF',
+              fontFamily: 'DM Sans, sans-serif', transition: 'all 0.2s', marginBottom: -1,
+              color: tab === id ? '#1B2B4B' : '#7A7A8C',
               borderBottom: tab === id ? '2px solid #C9A96E' : '2px solid transparent',
             }}>
               {label}
@@ -156,29 +176,29 @@ export default function Dashboard({ pov, actifs, userProfile }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Droits estimés — statu quo', val: calculs.droits.statusQuo, bg: '#F9FAFB', color: '#1B2B4B', sub: 'Situation actuelle sans action' },
-                  { label: 'Droits après optimisation', val: calculs.droits.optimise, bg: '#F0FDF4', color: '#16A34A', sub: 'Scénario optimisé' },
+                  { label: 'Droits après optimisation', val: calculs.droits.optimise, bg: '#F0FDF4', color: '#10B981', sub: 'Scénario optimisé' },
                   { label: 'Économie possible', val: calculs.economieSuccession, bg: '#FFF8F0', color: '#C9A96E', sub: 'Avec les actions recommandées', border: '1px solid #FDE8C8' },
                 ].map(({ label, val, bg, color, sub, border }) => (
                   <div key={label} style={{ background: bg, borderRadius: 10, padding: 20, border }}>
-                    <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>{label}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 8 }}>{label}</p>
                     {loading ? <Skeleton h={30} /> : <p style={{ color, fontSize: 26, fontWeight: 700, margin: '0 0 4px' }}>{euro(val)}</p>}
-                    <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>{sub}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>{sub}</p>
                   </div>
                 ))}
               </div>
 
               {/* Détail par levier */}
               <div style={{ background: '#FAFAF9', border: '1px solid #F0EBE4', borderRadius: 10, padding: 18, marginBottom: 24 }}>
-                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Comment on y arrive — détail par levier</p>
+                <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Comment on y arrive — détail par levier</p>
                 {actions.map((a, i) => {
-                  const urgenceColor = a.urgence === 'rouge' ? '#DC2626' : a.urgence === 'orange' ? '#D97706' : '#16A34A';
+                  const urgenceColor = a.urgence === 'rouge' ? '#E24B4A' : a.urgence === 'orange' ? '#F59E0B' : '#10B981';
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: i < actions.length - 1 ? 10 : 0, marginBottom: i < actions.length - 1 ? 10 : 0, borderBottom: i < actions.length - 1 ? '1px dashed #EDE8E3' : 'none' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1 }}>
                         <span style={{ color: urgenceColor, fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>●</span>
                         <span style={{ color: '#374151', fontSize: 13 }}>{a.titre}</span>
                       </div>
-                      <span style={{ color: a.economie > 0 ? '#C9A96E' : '#9CA3AF', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <span style={{ color: a.economie > 0 ? '#C9A96E' : '#7A7A8C', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {a.economie > 0 ? euro(a.economie) : a.economieLabel}
                       </span>
                     </div>
@@ -187,7 +207,7 @@ export default function Dashboard({ pov, actifs, userProfile }) {
               </div>
 
               <div>
-                <p style={{ color: '#9CA3AF', fontSize: 13, marginBottom: 16, fontWeight: 500 }}>Comparatif visuel</p>
+                <p style={{ color: '#7A7A8C', fontSize: 13, marginBottom: 16, fontWeight: 500 }}>Comparatif visuel</p>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 32, height: 120 }}>
                   {[
                     { label: 'Statu quo', val: calculs.droits.statusQuo, color: '#1B2B4B' },
@@ -214,31 +234,30 @@ export default function Dashboard({ pov, actifs, userProfile }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 16, marginBottom: 20 }}>
                 {[
                   { label: 'Impôts annuels estimés', val: calculs.impots.total, suffix: '/an', color: '#1B2B4B', bg: '#F9FAFB', sub: 'IR + IFI + Prélèvements sociaux' },
-                  { label: 'Économies possibles', val: calculs.economiesAnnuelles, suffix: '/an', color: '#16A34A', bg: '#F0FDF4', sub: 'Gain annuel possible' },
+                  { label: 'Économies possibles', val: calculs.economiesAnnuelles, suffix: '/an', color: '#10B981', bg: '#F0FDF4', sub: 'Gain annuel possible' },
                   { label: 'Gain sur 10 ans', val: calculs.gainDixAns, suffix: '', color: '#C9A96E', bg: '#FFF8F0', sub: 'Projection optimisation', border: '1px solid #FDE8C8' },
                 ].map(({ label, val, suffix, color, bg, sub, border }) => (
                   <div key={label} style={{ background: bg, borderRadius: 10, padding: 20, border }}>
-                    <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>{label}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 8 }}>{label}</p>
                     {loading ? <Skeleton h={28} /> : <p style={{ color, fontSize: 24, fontWeight: 700, margin: '0 0 4px' }}>{euro(val)}{suffix}</p>}
-                    <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>{sub}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>{sub}</p>
                   </div>
                 ))}
               </div>
               {/* Détail par levier — optimisation */}
               <div style={{ background: '#FAFAF9', border: '1px solid #F0EBE4', borderRadius: 10, padding: 18, marginBottom: 20 }}>
-                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Économies possibles — détail par action</p>
+                <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Économies possibles — détail par action</p>
                 {actions.map((a, i) => {
-                  const urgenceColor = a.urgence === 'rouge' ? '#DC2626' : a.urgence === 'orange' ? '#D97706' : '#16A34A';
+                  const urgenceColor = a.urgence === 'rouge' ? '#E24B4A' : a.urgence === 'orange' ? '#F59E0B' : '#10B981';
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: i < actions.length - 1 ? 10 : 0, marginBottom: i < actions.length - 1 ? 10 : 0, borderBottom: i < actions.length - 1 ? '1px dashed #EDE8E3' : 'none' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1 }}>
                         <span style={{ color: urgenceColor, fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>●</span>
                         <div>
                           <span style={{ color: '#374151', fontSize: 13 }}>{a.titre}</span>
-                          <span style={{ color: '#9CA3AF', fontSize: 12, marginLeft: 8 }}>· coût {a.coutLabel}</span>
                         </div>
                       </div>
-                      <span style={{ color: a.economie > 0 ? '#16A34A' : '#9CA3AF', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      <span style={{ color: a.economie > 0 ? '#10B981' : '#7A7A8C', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         {a.economie > 0 ? `+ ${euro(a.economie)}` : a.economieLabel}
                       </span>
                     </div>
@@ -248,7 +267,7 @@ export default function Dashboard({ pov, actifs, userProfile }) {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 20 }}>
-                  <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 14, fontWeight: 500 }}>Répartition fiscale</p>
+                  <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 14, fontWeight: 500 }}>Répartition fiscale</p>
                   {[['Impôt sur le revenu', calculs.impots.IR, '#1B2B4B'], ['IFI', calculs.impots.IFI, '#C9A96E'], ['Prél. sociaux', calculs.impots.PS, '#6B7280']].map(([label, val, color]) => (
                     <div key={label} style={{ marginBottom: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -262,11 +281,11 @@ export default function Dashboard({ pov, actifs, userProfile }) {
                   ))}
                 </div>
                 <div style={{ background: '#F0FDF4', borderRadius: 10, padding: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-                  <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 10 }}>Taux effectif estimé</p>
-                  <p className="font-serif" style={{ fontSize: 44, fontWeight: 700, color: calculs.impots.total > 15000 ? '#DC2626' : '#16A34A', margin: 0 }}>
+                  <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 10 }}>Taux effectif estimé</p>
+                  <p className="font-serif" style={{ fontSize: 44, fontWeight: 700, color: calculs.impots.total > 15000 ? '#E24B4A' : '#10B981', margin: 0 }}>
                     {patrimoine > 0 ? `${Math.round((calculs.impots.total / Math.max(patrimoine * 0.04, 1)) * 100)}%` : '0%'}
                   </p>
-                  <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 6 }}>sur revenus estimés</p>
+                  <p style={{ color: '#7A7A8C', fontSize: 11, marginTop: 6 }}>sur revenus estimés</p>
                 </div>
               </div>
             </div>
@@ -278,7 +297,7 @@ export default function Dashboard({ pov, actifs, userProfile }) {
       <div className="card" style={{ padding: 28 }}>
         <div style={{ marginBottom: 24 }}>
           <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 4px' }}>Actions prioritaires</h2>
-          <p style={{ color: '#9CA3AF', fontSize: 13, margin: 0 }}>Pour {person?.prenom}, triées par urgence</p>
+          <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0 }}>Pour {person?.prenom}, triées par urgence</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {actions.map((action, i) => (
@@ -287,53 +306,198 @@ export default function Dashboard({ pov, actifs, userProfile }) {
               onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
                     <Badge urgence={action.urgence} />
                     <span style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 15 }}>{action.titre}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-                    <span style={{ color: '#16A34A', fontSize: 13 }}>✓ {action.economieLabel}</span>
-                    <span style={{ color: '#6B7280', fontSize: 13 }}>Coût : {action.coutLabel}</span>
-                    <span style={{ color: '#9CA3AF', fontSize: 13 }}>⏱ {action.delai}</span>
+                  <p style={{ color: '#7A7A8C', fontSize: 13, lineHeight: 1.5, margin: '0 0 10px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {action.description}
+                  </p>
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {action.economie > 0 ? (
+                      <span style={{ color: '#10B981', fontWeight: 600, fontSize: 14 }}>
+                        ✓ {euro(action.economie)} d'économies identifiées
+                      </span>
+                    ) : (
+                      <span style={{ color: '#7A7A8C', fontSize: 13 }}>{action.economieLabel}</span>
+                    )}
                   </div>
                 </div>
                 <button className="btn-navy" onClick={() => setSelectedAction(action)} style={{ fontSize: 13, padding: '9px 18px', whiteSpace: 'nowrap' }}>
                   En savoir plus →
                 </button>
               </div>
+              {/* Partenaire contextuel */}
+              {action.partenaire && (
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #EDE8E3' }}>
+                  {isNessoPlus ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 15 }}>🤝</span>
+                        <div>
+                          <span style={{ color: '#1B2B4B', fontSize: 13, fontWeight: 600 }}>{action.partenaire.nom}</span>
+                          <span style={{ color: '#7A7A8C', fontSize: 12, marginLeft: 8 }}>{action.partenaire.type}</span>
+                        </div>
+                      </div>
+                      <button className="btn-gold" style={{ fontSize: 12, padding: '6px 14px' }}>Prendre rendez-vous →</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 15 }}>🤝</span>
+                        <span style={{ color: '#7A7A8C', fontSize: 13 }}>Un partenaire Nesso est disponible pour cette action</span>
+                        <NessoBadge />
+                      </div>
+                      <button onClick={() => setShowNessoPlus(true)} style={{ background: 'none', border: '1px solid #E5E7EB', borderRadius: 6, padding: '5px 12px', fontSize: 12, color: '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                        Débloquer →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
       </div>
 
+      {/* ── Modal Nesso+ ── */}
+      <Modal open={showNessoPlus} onClose={() => setShowNessoPlus(false)} title="">
+        <div style={{ textAlign: 'center', paddingBottom: 8 }}>
+          <div style={{ background: '#1B2B4B', borderRadius: 12, padding: '28px 24px 24px', marginBottom: 24 }}>
+            <p style={{ color: '#C9A96E', fontSize: 13, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>✦ Nesso+</p>
+            <p className="font-serif" style={{ color: 'white', fontSize: 30, fontWeight: 700, margin: '0 0 6px' }}>79€</p>
+            <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0 }}>Paiement unique · Accès à vie · Sans abonnement</p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 24, textAlign: 'left' }}>
+            {[
+              {
+                icon: '🔄',
+                titre: 'Recalcul automatique',
+                desc: 'Vos recommandations se mettent à jour chaque fois que vous ajoutez un actif ou un membre à votre famille. Votre plan reste toujours à jour.',
+              },
+              {
+                icon: '🔔',
+                titre: 'Alertes législatives personnalisées',
+                desc: 'Nesso vous prévient si une loi change et impacte votre situation spécifique — pas une newsletter généraliste, une alerte ciblée sur votre patrimoine.',
+              },
+              {
+                icon: '📄',
+                titre: 'Rapport PDF structuré',
+                desc: 'Un document complet, prêt à apporter à votre notaire ou CGP : patrimoine, recommandations, étapes, chiffres clés.',
+              },
+            ].map(({ icon, titre, desc }) => (
+              <div key={titre} style={{ display: 'flex', gap: 14, background: '#F9F8F6', borderRadius: 10, padding: 16 }}>
+                <span style={{ fontSize: 22, flexShrink: 0 }}>{icon}</span>
+                <div>
+                  <p style={{ color: '#1B2B4B', fontWeight: 600, fontSize: 14, margin: '0 0 4px' }}>{titre}</p>
+                  <p style={{ color: '#6B7280', fontSize: 13, lineHeight: 1.55, margin: 0 }}>{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button className="btn-gold" style={{ width: '100%', padding: '14px', fontSize: 15, fontWeight: 700, borderRadius: 10 }}>
+            Accéder à Nesso+ — 79€ →
+          </button>
+          <p style={{ color: '#7A7A8C', fontSize: 11, marginTop: 12 }}>
+            Vous débloquez immédiatement le détail de toutes vos recommandations.
+          </p>
+        </div>
+      </Modal>
+
       <Modal open={!!selectedAction} onClose={() => setSelectedAction(null)} title={selectedAction?.titre}>
         {selectedAction && (
           <>
-            <div style={{ marginBottom: 16 }}><Badge urgence={selectedAction.urgence} /></div>
+            {/* Toujours visible : badge + description */}
+            <div style={{ marginBottom: 12 }}><Badge urgence={selectedAction.urgence} /></div>
             <p style={{ color: '#4B5563', lineHeight: 1.75, fontSize: 14, marginBottom: 20 }}>{selectedAction.description}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-              <div style={{ background: '#F0FDF4', borderRadius: 9, padding: 16 }}>
-                <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Économie potentielle</p>
-                <p style={{ color: '#16A34A', fontWeight: 700, fontSize: 17, margin: 0 }}>{selectedAction.economieLabel}</p>
-              </div>
-              <div style={{ background: '#F9FAFB', borderRadius: 9, padding: 16 }}>
-                <p style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 4 }}>Coût de l'action</p>
-                <p style={{ color: '#1B2B4B', fontWeight: 700, fontSize: 17, margin: 0 }}>{selectedAction.coutLabel}</p>
-              </div>
-            </div>
-            <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 14, marginBottom: selectedAction.partenaire ? 12 : 0 }}>
-              <p style={{ color: '#92400E', fontSize: 13, fontWeight: 500, margin: 0 }}>⏱ Délai recommandé : {selectedAction.delai}</p>
-            </div>
-            {selectedAction.partenaire && (
-              <div style={{ background: '#F5F0EA', border: '1px solid #E8DDD0', borderRadius: 8, padding: 16 }}>
-                <p style={{ color: '#9CA3AF', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Partenaire recommandé par Nesso</p>
-                <p style={{ color: '#1B2B4B', fontWeight: 700, fontSize: 15, margin: '0 0 2px' }}>{selectedAction.partenaire.nom}</p>
-                <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 10px' }}>{selectedAction.partenaire.type}</p>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                  <span style={{ color: '#16A34A', fontSize: 12 }}>● {selectedAction.partenaire.disponibilite}</span>
-                  <button className="btn-navy" style={{ fontSize: 12, padding: '7px 14px' }}>Prendre rendez-vous →</button>
+
+            {isNessoPlus ? (
+              /* ── ÉTAT NESSO+ : tout débloqué ── */
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div style={{ background: '#F0FDF4', borderRadius: 9, padding: 16 }}>
+                    <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 4 }}>Économie potentielle</p>
+                    <p style={{ color: '#10B981', fontWeight: 700, fontSize: 17, margin: 0 }}>{selectedAction.economieLabel}</p>
+                  </div>
+                  <div style={{ background: '#F9FAFB', borderRadius: 9, padding: 16 }}>
+                    <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 4 }}>Coût estimé</p>
+                    <p style={{ color: '#1B2B4B', fontWeight: 700, fontSize: 17, margin: 0 }}>{selectedAction.coutLabel}</p>
+                  </div>
                 </div>
-              </div>
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                  <p style={{ color: '#92400E', fontSize: 13, fontWeight: 500, margin: 0 }}>⏱ À faire avant : {selectedAction.delai}</p>
+                </div>
+                {selectedAction.etapes && (
+                  <div style={{ background: '#F9FAFB', border: '1px solid #F0EBE4', borderRadius: 9, padding: 16, marginBottom: 12 }}>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Plan d'action — étapes</p>
+                    {selectedAction.etapes.map((e, i) => (
+                      <div key={i} style={{ display: 'flex', gap: 10, marginBottom: i < selectedAction.etapes.length - 1 ? 10 : 0 }}>
+                        <span style={{ background: '#1B2B4B', color: '#C9A96E', fontSize: 11, fontWeight: 700, width: 20, height: 20, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+                        <span style={{ color: '#374151', fontSize: 13, lineHeight: 1.5 }}>{e}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {selectedAction.partenaire && (
+                  <div style={{ background: '#F5F0EA', border: '1px solid #E8DDD0', borderRadius: 8, padding: 16 }}>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Partenaire recommandé par Nesso</p>
+                    <p style={{ color: '#1B2B4B', fontWeight: 700, fontSize: 15, margin: '0 0 2px' }}>{selectedAction.partenaire.nom}</p>
+                    <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 10px' }}>{selectedAction.partenaire.type}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <span style={{ color: '#10B981', fontSize: 12 }}>● {selectedAction.partenaire.disponibilite}</span>
+                      <button className="btn-navy" style={{ fontSize: 12, padding: '7px 14px' }}>Prendre rendez-vous →</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* ── ÉTAT FREE : titre + description + montant visibles, "comment faire" verrouillé ── */
+              <>
+                {/* Montant visible */}
+                {selectedAction.economie > 0 && (
+                  <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 10, padding: 16, marginBottom: 14, textAlign: 'center' }}>
+                    <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 4 }}>Économies identifiées</p>
+                    <p style={{ color: '#10B981', fontWeight: 700, fontSize: 28, margin: 0, fontFamily: 'DM Serif Display, serif' }}>{euro(selectedAction.economie)}</p>
+                  </div>
+                )}
+                {/* Bloc "Comment faire" verrouillé */}
+                <div style={{ border: '1px solid #E8DDD0', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ padding: 16, background: '#FAFAF9', borderBottom: '1px solid #F0EBE4', pointerEvents: 'none' }}>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Comment faire</p>
+                    {/* Délai + coût floutés */}
+                    <div style={{ display: 'flex', gap: 10, marginBottom: selectedAction.etapes ? 12 : 0 }}>
+                      <div style={{ background: '#FFFBEB', borderRadius: 7, padding: '8px 12px', flex: 1, filter: 'blur(4px)', userSelect: 'none' }}>
+                        <p style={{ color: '#92400E', fontSize: 12, margin: 0 }}>⏱ {selectedAction.delai}</p>
+                      </div>
+                      <div style={{ background: '#F9FAFB', borderRadius: 7, padding: '8px 12px', flex: 1, filter: 'blur(4px)', userSelect: 'none' }}>
+                        <p style={{ color: '#1B2B4B', fontSize: 12, margin: 0 }}>💸 {selectedAction.coutLabel}</p>
+                      </div>
+                    </div>
+                    {/* Étapes floutées */}
+                    {selectedAction.etapes && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {selectedAction.etapes.slice(0, 3).map((e, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', filter: 'blur(3px)', userSelect: 'none' }}>
+                            <span style={{ background: '#E5E7EB', color: '#7A7A8C', fontSize: 10, fontWeight: 700, width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                            <span style={{ color: '#374151', fontSize: 12 }}>{e}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ background: '#1B2B4B', padding: 16, textAlign: 'center' }}>
+                    <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 14, margin: '0 0 4px' }}>✦ Nesso+</p>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: '0 0 12px' }}>
+                      Étapes · Délais · Coûts · Partenaire recommandé
+                    </p>
+                    <button className="btn-gold" onClick={() => setShowNessoPlus(true)} style={{ fontSize: 13, padding: '10px 24px', fontWeight: 700 }}>
+                      Débloquer — 79€ →
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
           </>
         )}

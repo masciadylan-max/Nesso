@@ -29,10 +29,10 @@ function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
       <div style={{ marginBottom: 16 }}>
         <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 7 }}>Votre clé API (sk-ant-...)</label>
         <input type="password" value={val} onChange={e => setVal(e.target.value)} placeholder="sk-ant-api03-..."
-          style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'Inter, sans-serif' }} />
+          style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
       </div>
       <button className="btn-navy" onClick={save} style={{ width: '100%' }}>Enregistrer</button>
-      <p style={{ color: '#9CA3AF', fontSize: 11, textAlign: 'center', marginTop: 12 }}>
+      <p style={{ color: '#7A7A8C', fontSize: 11, textAlign: 'center', marginTop: 12 }}>
         Obtenez votre clé sur <strong>console.anthropic.com</strong>
       </p>
     </Modal>

@@ -22,7 +22,7 @@ export const Modal = ({ open, onClose, title, children }) => {
       <div className="card fade-in" onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, padding: 28, maxHeight: '85vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <h3 className="font-serif" style={{ color: '#1B2B4B', fontSize: 20, margin: 0, lineHeight: 1.3 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#9CA3AF', cursor: 'pointer', lineHeight: 1, marginLeft: 12, flexShrink: 0 }}>×</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 22, color: '#7A7A8C', cursor: 'pointer', lineHeight: 1, marginLeft: 12, flexShrink: 0 }}>×</button>
         </div>
         {children}
       </div>

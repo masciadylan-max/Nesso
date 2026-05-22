@@ -19,7 +19,7 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
         <div style={{ marginBottom: 32 }}>
           <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Ma famille</p>
           <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, margin: 0 }}>Votre situation familiale</h1>
-          <p style={{ color: '#9CA3AF', marginTop: 6, fontSize: 14 }}>Basé sur vos réponses lors de l'audit</p>
+          <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>Basé sur vos réponses lors de l'audit</p>
         </div>
         <div className="card" style={{ padding: 32, marginBottom: 22 }}>
           {/* User + conjoint */}
@@ -30,8 +30,8 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
               </div>
               <p style={{ fontWeight: 700, color: '#1B2B4B', fontSize: 16, margin: '0 0 3px' }}>{userProfile.prenom || 'Vous'}</p>
               <p style={{ color: '#C9A96E', fontSize: 12, margin: '0 0 4px', fontWeight: 500 }}>Vous</p>
-              {userProfile.age && <p style={{ color: '#9CA3AF', fontSize: 12, margin: '0 0 2px' }}>{userProfile.age} ans</p>}
-              {userProfile.profession && <p style={{ color: '#9CA3AF', fontSize: 12, margin: 0 }}>{userProfile.profession}</p>}
+              {userProfile.age && <p style={{ color: '#7A7A8C', fontSize: 12, margin: '0 0 2px' }}>{userProfile.age} ans</p>}
+              {userProfile.profession && <p style={{ color: '#7A7A8C', fontSize: 12, margin: 0 }}>{userProfile.profession}</p>}
               {userPatrimoine > 0 && <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 14, marginTop: 8 }}>{euro(userPatrimoine)}</p>}
             </div>
             {userProfile.conjoint && (
@@ -42,8 +42,8 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
                     {userProfile.conjoint[0].toUpperCase()}
                   </div>
                   <p style={{ fontWeight: 700, color: '#1B2B4B', fontSize: 16, margin: '0 0 3px' }}>{userProfile.conjoint}</p>
-                  <p style={{ color: '#9CA3AF', fontSize: 12, margin: 0 }}>Conjoint(e)</p>
-                  {userProfile.regime && <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 4 }}>{userProfile.regime}</p>}
+                  <p style={{ color: '#7A7A8C', fontSize: 12, margin: 0 }}>Conjoint(e)</p>
+                  {userProfile.regime && <p style={{ color: '#7A7A8C', fontSize: 11, marginTop: 4 }}>{userProfile.regime}</p>}
                 </div>
               </>
             )}
@@ -61,14 +61,14 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
                       {prenom[0].toUpperCase()}
                     </div>
                     <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{prenom}</p>
-                    <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>Enfant</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>Enfant</p>
                   </div>
                 ))}
               </div>
             </>
           )}
           {!hasFamily && (
-            <p style={{ textAlign: 'center', color: '#9CA3AF', fontSize: 13, marginTop: 20, fontStyle: 'italic' }}>
+            <p style={{ textAlign: 'center', color: '#7A7A8C', fontSize: 13, marginTop: 20, fontStyle: 'italic' }}>
               Refaites l'audit et mentionnez les prénoms de vos proches pour enrichir cet arbre.
             </p>
           )}
@@ -79,9 +79,9 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }}>
               {userActifs.map(a => (
                 <div key={a.id} style={{ background: '#F9FAFB', borderRadius: 9, padding: 14 }}>
-                  <p style={{ fontWeight: 500, fontSize: 14, color: '#2C2C2C', margin: '0 0 4px' }}>{a.nom}</p>
+                  <p style={{ fontWeight: 500, fontSize: 14, color: '#1A1A2E', margin: '0 0 4px' }}>{a.nom}</p>
                   <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 17, margin: '0 0 4px' }}>{euro(a.valeur)}</p>
-                  <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>{a.type}{a.pays ? ` · ${a.pays}` : ''}</p>
+                  <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>{a.type}{a.pays ? ` · ${a.pays}` : ''}</p>
                 </div>
               ))}
             </div>
@@ -106,15 +106,15 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
         onMouseEnter={e => { if (!isPov && !isSel) e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(27,43,75,0.1)'; }}
         onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}>
         {alerts.length > 0 && (
-          <div title={alerts.join(' | ')} style={{ position: 'absolute', top: 8, right: 8, width: 9, height: 9, borderRadius: '50%', background: '#DC2626', animation: 'pulse 2s infinite' }} />
+          <div title={alerts.join(' | ')} style={{ position: 'absolute', top: 8, right: 8, width: 9, height: 9, borderRadius: '50%', background: '#E24B4A', animation: 'pulse 2s infinite' }} />
         )}
         <div style={{ width: 42, height: 42, borderRadius: '50%', background: isPov ? '#C9A96E' : '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 17, margin: '0 auto 10px' }}>
           {p.prenom[0]}
         </div>
         <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14, margin: '0 0 3px' }}>{p.prenom}</p>
-        <p style={{ color: '#9CA3AF', fontSize: 11, margin: '0 0 6px' }}>{p.age} ans</p>
+        <p style={{ color: '#7A7A8C', fontSize: 11, margin: '0 0 6px' }}>{p.age} ans</p>
         {patrimoine > 0 && <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 13, margin: 0 }}>{euro(patrimoine)}</p>}
-        {ACTIONS[p.id] && <p style={{ color: '#9CA3AF', fontSize: 11, marginTop: 3 }}>{ACTIONS[p.id].length} action(s)</p>}
+        {ACTIONS[p.id] && <p style={{ color: '#7A7A8C', fontSize: 11, marginTop: 3 }}>{ACTIONS[p.id].length} action(s)</p>}
       </div>
     );
   };
@@ -129,7 +129,7 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
       <div style={{ marginBottom: 32 }}>
         <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Ma famille</p>
         <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, margin: 0 }}>Arbre généalogique</h1>
-        <p style={{ color: '#9CA3AF', marginTop: 6, fontSize: 14 }}>Cliquez sur un membre pour voir sa fiche · ⬤ rouge = alerte active</p>
+        <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>Cliquez sur un membre pour voir sa fiche · ⬤ rouge = alerte active</p>
       </div>
 
       {/* Arbre */}
@@ -176,7 +176,7 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
               <div>
                 <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 26, margin: '0 0 4px' }}>{selectedPerson.prenom}</h2>
                 <p style={{ color: '#6B7280', margin: 0, fontSize: 14 }}>{selectedPerson.role} · {selectedPerson.age} ans</p>
-                {selectedPerson.profession && <p style={{ color: '#9CA3AF', margin: '2px 0 0', fontSize: 13 }}>{selectedPerson.profession}</p>}
+                {selectedPerson.profession && <p style={{ color: '#7A7A8C', margin: '2px 0 0', fontSize: 13 }}>{selectedPerson.profession}</p>}
                 {selectedPerson.handicap && <span style={{ display: 'inline-block', marginTop: 6, background: '#EFF6FF', color: '#1D4ED8', fontSize: 11, padding: '2px 9px', borderRadius: 6, fontWeight: 500 }}>✓ Abattement handicap 159 325€</span>}
               </div>
             </div>
@@ -190,7 +190,7 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
           {selectedAlerts.length > 0 && (
             <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: 16, marginBottom: 20 }}>
               <p style={{ color: '#991B1B', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>⚠ Alertes pour {selectedPerson.prenom}</p>
-              {selectedAlerts.map((a, i) => <p key={i} style={{ color: '#DC2626', fontSize: 13, margin: '0 0 4px' }}>• {a}</p>)}
+              {selectedAlerts.map((a, i) => <p key={i} style={{ color: '#E24B4A', fontSize: 13, margin: '0 0 4px' }}>• {a}</p>)}
             </div>
           )}
 
@@ -200,10 +200,10 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 12 }}>
                 {selectedActifs.map(a => (
                   <div key={a.id} style={{ background: '#F9FAFB', borderRadius: 9, padding: 14 }}>
-                    <p style={{ fontWeight: 500, fontSize: 14, color: '#2C2C2C', margin: '0 0 4px' }}>{a.nom}</p>
+                    <p style={{ fontWeight: 500, fontSize: 14, color: '#1A1A2E', margin: '0 0 4px' }}>{a.nom}</p>
                     <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 17, margin: '0 0 4px' }}>{euro(a.valeur / a.proprietaires.length)}</p>
-                    <p style={{ color: '#9CA3AF', fontSize: 11, margin: 0 }}>{a.type}{a.pays ? ` · ${a.pays}` : ''}</p>
-                    {a.note && <p style={{ color: '#D97706', fontSize: 11, marginTop: 4 }}>ℹ {a.note}</p>}
+                    <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>{a.type}{a.pays ? ` · ${a.pays}` : ''}</p>
+                    {a.note && <p style={{ color: '#F59E0B', fontSize: 11, marginTop: 4 }}>ℹ {a.note}</p>}
                   </div>
                 ))}
               </div>
@@ -218,8 +218,8 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
                   <div key={i} style={{ background: '#F9FAFB', borderRadius: 9, padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Badge urgence={action.urgence} />
                     <div>
-                      <p style={{ fontWeight: 500, fontSize: 13, color: '#2C2C2C', margin: '0 0 2px' }}>{action.titre}</p>
-                      <p style={{ color: '#9CA3AF', fontSize: 12, margin: 0 }}>{action.economieLabel} · Délai {action.delai}</p>
+                      <p style={{ fontWeight: 500, fontSize: 13, color: '#1A1A2E', margin: '0 0 2px' }}>{action.titre}</p>
+                      <p style={{ color: '#7A7A8C', fontSize: 12, margin: 0 }}>{action.economieLabel} · Délai {action.delai}</p>
                     </div>
                   </div>
                 ))}
@@ -228,7 +228,7 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
           )}
 
           {selectedActifs.length === 0 && selectedActions.length === 0 && (
-            <p style={{ color: '#9CA3AF', textAlign: 'center', padding: '16px 0', fontSize: 14 }}>Données patrimoniales non renseignées pour ce membre</p>
+            <p style={{ color: '#7A7A8C', textAlign: 'center', padding: '16px 0', fontSize: 14 }}>Données patrimoniales non renseignées pour ce membre</p>
           )}
         </div>
       )}

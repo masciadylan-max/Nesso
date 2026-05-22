@@ -99,8 +99,8 @@ export default function Aide({ pov, apiKey, actifs }) {
           <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>N</div>
           <div>
             <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14, margin: 0 }}>Conseiller Nesso</p>
-            <p style={{ color: '#16A34A', fontSize: 11, margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A', display: 'inline-block' }} /> En ligne · Contexte : {person?.prenom}
+            <p style={{ color: '#10B981', fontSize: 11, margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} /> En ligne · Contexte : {person?.prenom}
             </p>
           </div>
         </div>
@@ -111,7 +111,7 @@ export default function Aide({ pov, apiKey, actifs }) {
               {m.role === 'assistant' && (
                 <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 2 }}>N</div>
               )}
-              <div style={{ maxWidth: '78%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#2C2C2C', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              <div style={{ maxWidth: '78%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#1A1A2E', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                 {m.content}
               </div>
             </div>
@@ -126,7 +126,7 @@ export default function Aide({ pov, apiKey, actifs }) {
           )}
           {error && (
             <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: 12 }}>
-              <p style={{ color: '#DC2626', fontSize: 13, margin: 0 }}>⚠ {error}</p>
+              <p style={{ color: '#E24B4A', fontSize: 13, margin: 0 }}>⚠ {error}</p>
             </div>
           )}
           <div ref={endRef} />
@@ -135,7 +135,7 @@ export default function Aide({ pov, apiKey, actifs }) {
         {messages.length <= 1 && (
           <div style={{ padding: '0 20px 12px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
             {SUGGESTIONS.map((s, i) => (
-              <button key={i} onClick={() => setInput(s)} style={{ background: '#F5F0EA', border: '1px solid #E5D9C8', color: '#1B2B4B', borderRadius: 18, padding: '5px 13px', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'background 0.15s' }}
+              <button key={i} onClick={() => setInput(s)} style={{ background: '#F5F0EA', border: '1px solid #E5D9C8', color: '#1B2B4B', borderRadius: 18, padding: '5px 13px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'background 0.15s' }}
                 onMouseEnter={e => e.target.style.background = '#EDE8E0'} onMouseLeave={e => e.target.style.background = '#F5F0EA'}>
                 {s}
               </button>
@@ -146,7 +146,7 @@ export default function Aide({ pov, apiKey, actifs }) {
         <div style={{ borderTop: '1px solid #F5F0EA', padding: 16, display: 'flex', gap: 10 }}>
           <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
             placeholder="Posez votre question..."
-            style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 10, padding: '11px 15px', fontSize: 14, fontFamily: 'Inter, sans-serif' }} />
+            style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 10, padding: '11px 15px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
           <button className="btn-navy" onClick={send} disabled={loading || !input.trim()} style={{ padding: '11px 20px' }}>→</button>
         </div>
       </div>

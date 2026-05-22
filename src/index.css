@@ -1,17 +1,17 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
 
 * { box-sizing: border-box; }
 
 body {
   background-color: #F5F0EA;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   margin: 0;
-  color: #2C2C2C;
+  color: #1A1A2E;
 }
 
-.font-serif { font-family: 'Playfair Display', serif; }
+.font-serif { font-family: 'DM Serif Display', serif; }
 
 .card {
   background: white;
@@ -25,7 +25,7 @@ body {
   padding: 10px 20px;
   border-radius: 9px;
   font-weight: 500;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   border: none;
   cursor: pointer;
@@ -40,7 +40,7 @@ body {
   padding: 10px 20px;
   border-radius: 9px;
   font-weight: 500;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   border: none;
   cursor: pointer;

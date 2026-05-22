@@ -230,14 +230,14 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {hasSavedConversation && !isDemoMode && (
-                <button onClick={handleReprendreConversation} disabled={loading} style={{ width: '100%', padding: '14px', fontSize: 15, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
+                <button onClick={handleReprendreConversation} disabled={loading} style={{ width: '100%', padding: '14px', fontSize: 15, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
                   {loading ? '⏳ Génération de votre tableau...' : '✦ Reprendre ma dernière conversation →'}
                 </button>
               )}
               <button className="btn-navy" onClick={start} style={{ width: '100%', padding: '14px', fontSize: 15 }}>
                 {isDemoMode ? 'Démarrer la démo →' : hasSavedConversation ? 'Recommencer un nouvel audit →' : 'Commencer l\'audit →'}
               </button>
-              <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'Inter, sans-serif' }}>
+              <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'DM Sans, sans-serif' }}>
                 Voir l'exemple sans remplir →
               </button>
             </div>
@@ -249,11 +249,11 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>N</div>
                 <div>
                   <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14, margin: 0 }}>Conseiller Nesso</p>
-                  <p style={{ color: '#16A34A', fontSize: 11, margin: 0 }}>● {isDemoMode ? 'Mode démo' : 'En ligne'}</p>
+                  <p style={{ color: '#10B981', fontSize: 11, margin: 0 }}>● {isDemoMode ? 'Mode démo' : 'En ligne'}</p>
                 </div>
               </div>
               {isDemoMode && (
-                <button onClick={onApiKey} style={{ background: '#F0F4FF', border: '1px solid #C7D7FD', color: '#1D4ED8', borderRadius: 7, padding: '5px 11px', fontSize: 11, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                <button onClick={onApiKey} style={{ background: '#F0F4FF', border: '1px solid #C7D7FD', color: '#1D4ED8', borderRadius: 7, padding: '5px 11px', fontSize: 11, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
                   Activer le vrai Claude
                 </button>
               )}
@@ -265,7 +265,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
                   {m.role === 'assistant' && (
                     <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 2 }}>N</div>
                   )}
-                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#2C2C2C', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#1A1A2E', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                     {m.content}
                   </div>
                 </div>
@@ -283,9 +283,9 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
 
             {messages.length > 1 && !loading && (
               <div style={{ paddingLeft: 14, paddingRight: 14, paddingTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                <button onClick={handleSkip} style={{ background: 'none', border: '1px solid #E5E7EB', color: '#9CA3AF', borderRadius: 20, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.15s' }}
+                <button onClick={handleSkip} style={{ background: 'none', border: '1px solid #E5E7EB', color: '#7A7A8C', borderRadius: 20, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = '#C9A96E'; e.currentTarget.style.color = '#C9A96E'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.color = '#9CA3AF'; }}>
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.color = '#7A7A8C'; }}>
                   Je ne sais pas / passer pour l'instant
                 </button>
               </div>
@@ -293,21 +293,21 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
 
             <div style={{ borderTop: '1px solid #F5F0EA', padding: 14, display: 'flex', gap: 9 }}>
               <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
-                placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'Inter, sans-serif' }} />
+                placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
               <button className="btn-navy" onClick={() => send()} disabled={loading || !input.trim()} style={{ padding: '10px 18px' }}>→</button>
             </div>
             {msgCount >= 6 && !updating && !loading && (
               <div style={{ padding: '0 14px 10px' }}>
-                <button onClick={handleMettreAJour} style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 600, background: '#1B2B4B', color: '#C9A96E', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
+                <button onClick={handleMettreAJour} style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 600, background: '#1B2B4B', color: '#C9A96E', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
                   ✦ Générer mon tableau de bord →
                 </button>
               </div>
             )}
             <div style={{ textAlign: 'center', paddingBottom: 12, display: 'flex', justifyContent: 'center', gap: 16 }}>
-              <button onClick={handleMettreAJour} disabled={updating || loading} style={{ background: 'none', border: 'none', color: updating ? '#C9A96E' : '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>
+              <button onClick={handleMettreAJour} disabled={updating || loading} style={{ background: 'none', border: 'none', color: updating ? '#C9A96E' : '#7A7A8C', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
                 {updating ? '⏳ Génération...' : '📊 Mettre à jour'}
               </button>
-              <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer', fontSize: 12, fontFamily: 'Inter, sans-serif' }}>Nouvelle conversation</button>
+              <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>Nouvelle conversation</button>
             </div>
           </div>
         )}

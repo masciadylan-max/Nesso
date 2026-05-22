@@ -27,6 +27,7 @@ export const ACTIONS = {
   lucas: [
     {
       urgence: 'rouge',
+      titreGenerique: 'Donation internationale',
       titre: 'Donation Villa Porto Vecchio GP → Lucas',
       description: 'Les 2 lots en Italie (65 000€) ne sont pas cadastrés et restent dans une zone grise successorale. Une donation directe de votre grand-père à vous sécurise cet actif, l\'intègre à votre patrimoine et évite une double imposition franco-italienne. Votre grand-père a 84 ans — la fenêtre est courte.',
       economieLabel: 'Sécurise 65 000€ d\'actif',
@@ -38,6 +39,7 @@ export const ACTIONS = {
     },
     {
       urgence: 'orange',
+      titreGenerique: 'Reconnaissance de dette',
       titre: 'Reconnaissance de dette Parents → Lucas',
       description: 'Les investissements réalisés par vos parents pour vous (formation, soutien à la création de votre société, apports divers) peuvent être formalisés en reconnaissance de dette. Cela protège 20 à 30 000€ en cas de partage successoral et évite toute requalification en donation rapportable.',
       economieLabel: 'Protège 20–30 000€',
@@ -49,6 +51,7 @@ export const ACTIONS = {
     },
     {
       urgence: 'vert',
+      titreGenerique: 'Estimation immobilière',
       titre: 'Estimation officielle RP Versailles',
       description: 'La résidence principale est valorisée à 520 000€ sur estimation informelle. Une estimation récente par un agent immobilier (gratuite) ou un notaire permettrait d\'affiner tous les calculs de droits de succession. Si la valeur réelle est inférieure, les économies peuvent dépasser 5 000€.',
       economieLabel: 'Affine tous les calculs',
@@ -62,6 +65,7 @@ export const ACTIONS = {
   mere: [
     {
       urgence: 'rouge',
+      titreGenerique: 'Clause matrimoniale',
       titre: 'Vérifier clause attribution intégrale (GP/GM)',
       description: 'Vos parents ont un régime de communauté universelle. Si la clause d\'attribution intégrale est présente dans leur contrat de mariage, le premier décès ne génère aucun droit de succession — la totalité revient au survivant. À vérifier impérativement chez le notaire.',
       economieLabel: 'Économise ~12 000€ de droits',
@@ -73,6 +77,7 @@ export const ACTIONS = {
     },
     {
       urgence: 'orange',
+      titreGenerique: 'Testament / donation conjugale',
       titre: 'Testament ou donation entre époux',
       description: 'À 57 ans et sans revenus propres, il est important de formaliser vos droits sur le patrimoine conjugal (Biarritz, liquidités). Sans testament, vos droits légaux sont limités par la réserve héréditaire de vos enfants.',
       economieLabel: 'Protège vos droits sur Biarritz (120 000€)',
@@ -84,6 +89,7 @@ export const ACTIONS = {
     },
     {
       urgence: 'vert',
+      titreGenerique: 'Assurance-vie',
       titre: 'Assurance-vie au nom du Père avant 70 ans',
       description: 'Votre mari (60 ans) peut encore effectuer des versements sur une assurance-vie avec abattement de 152 500€ par bénéficiaire hors succession. La fenêtre avant 70 ans se ferme dans 10 ans — anticiper permet d\'optimiser la transmission.',
       economieLabel: 'Optimise jusqu\'à 30 000€ de transmission',
@@ -97,6 +103,7 @@ export const ACTIONS = {
   tante: [
     {
       urgence: 'rouge',
+      titreGenerique: 'Testament',
       titre: 'Rédiger un testament (appartement Bordeaux)',
       description: 'Sans enfants, votre appartement de Bordeaux (135 000€) ira à vos parents puis à vos neveux par défaut. Si vous souhaitez orienter cet héritage différemment (Lucas, Camille, association), un testament est indispensable.',
       economieLabel: 'Maîtrise la destination de 135 000€',
@@ -108,6 +115,7 @@ export const ACTIONS = {
     },
     {
       urgence: 'orange',
+      titreGenerique: 'Renégociation de crédit',
       titre: 'Renégociation du crédit Bordeaux',
       description: 'Avec les taux actuels et votre statut de fonctionnaire (revenus stables), une renégociation du crédit ou un remboursement anticipé partiel peut réduire votre charge mensuelle et améliorer votre reste à vivre.',
       economieLabel: 'Jusqu\'à 5 000€ d\'économies',
@@ -119,6 +127,7 @@ export const ACTIONS = {
     },
     {
       urgence: 'vert',
+      titreGenerique: 'Assurance-vie',
       titre: 'Assurance-vie complémentaire (avant 70 ans)',
       description: 'Fonctionnaire avec droits à pension assurés, vous pouvez optimiser votre transmission via des versements sur assurance-vie. L\'abattement de 152 500€ par bénéficiaire est particulièrement avantageux pour transmettre à Lucas ou Camille.',
       economieLabel: 'Jusqu\'à 20 000€ optimisés',
