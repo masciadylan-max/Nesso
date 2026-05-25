@@ -6,6 +6,7 @@ import Famille from './components/Famille.jsx';
 import Actifs from './components/Actifs.jsx';
 import Aide from './components/Aide.jsx';
 import Onboarding from './components/Onboarding.jsx';
+import Confidentialite from './components/Confidentialite.jsx';
 import { Modal } from './components/Shared.jsx';
 
 const LS = {
@@ -108,8 +109,17 @@ export default function App() {
         {view === 'dashboard' && <Dashboard pov={pov} actifs={actifs} userProfile={userProfile} />}
         {view === 'famille'   && <Famille   pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
         {view === 'actifs'    && <Actifs    pov={pov} actifs={actifs} setActifs={setActifs} />}
-        {view === 'aide'      && <Aide      pov={pov} apiKey={apiKey} actifs={actifs} />}
+        {view === 'aide'            && <Aide           pov={pov} apiKey={apiKey} actifs={actifs} />}
+        {view === 'confidentialite' && <Confidentialite />}
       </main>
+      {/* Footer */}
+      <footer style={{ textAlign: 'center', padding: '16px 24px 80px', borderTop: '1px solid rgba(27,43,75,0.08)' }}>
+        <button onClick={() => setView('confidentialite')} style={{ background: 'none', border: 'none', color: '#7A7A8C', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textDecoration: 'underline' }}>
+          Politique de confidentialité
+        </button>
+        <span style={{ color: '#D1C4B0', margin: '0 10px' }}>·</span>
+        <span style={{ color: '#7A7A8C', fontSize: 12 }}>© 2026 Nesso — Estimations à titre indicatif</span>
+      </footer>
       <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
     </div>
   );

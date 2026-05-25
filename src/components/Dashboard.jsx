@@ -10,10 +10,19 @@ const computeUserCalculs = (patrimoine, userProfile) => {
   const droitsStatusQuo = Math.round(taxable * taux);
   const droitsOptimise = Math.round(droitsStatusQuo * 0.15);
   const totalImpots = Math.round(patrimoine * 0.012);
+
+  // IFI : uniquement patrimoine immobilier net, abattement 30% sur résidence principale
+  const immoActifs = (userProfile?.actifs || []).filter(a => a.categorie === 'immobilier');
+  const patrimoineImmoNet = immoActifs.reduce((sum, a) => {
+    const abattRP = a.type === 'Résidence principale' ? 0.30 : 0;
+    return sum + (a.valeur || 0) * (1 - abattRP);
+  }, 0);
+  const ifi = patrimoineImmoNet > 1300000 ? Math.round((patrimoineImmoNet - 800000) * 0.005) : 0;
+
   return {
     droits: { statusQuo: droitsStatusQuo, optimise: droitsOptimise },
     economieSuccession: Math.max(0, droitsStatusQuo - droitsOptimise),
-    impots: { IR: Math.round(totalImpots * 0.65), IFI: patrimoine > 1300000 ? Math.round((patrimoine - 800000) * 0.005) : 0, PS: Math.round(totalImpots * 0.35), total: totalImpots },
+    impots: { IR: Math.round(totalImpots * 0.65), IFI: ifi, PS: Math.round(totalImpots * 0.35), total: totalImpots },
     economiesAnnuelles: Math.round(totalImpots * 0.18),
     gainDixAns: Math.round(totalImpots * 1.8),
     score: userProfile?.score || 60,
@@ -25,7 +34,10 @@ const generateUserActions = (userProfile, patrimoine) => {
   const actions = [];
   const alertes = userProfile?.alertes || [];
 
-  if (alertes.some(a => a.toLowerCase().includes('ifi')) || patrimoine > 1300000) {
+  const patrimoineImmoNet = (userProfile?.actifs || [])
+    .filter(a => a.categorie === 'immobilier')
+    .reduce((sum, a) => sum + (a.valeur || 0) * (a.type === 'Résidence principale' ? 0.70 : 1), 0);
+  if (alertes.some(a => a.toLowerCase().includes('ifi')) || patrimoineImmoNet > 1300000) {
     actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité IFI', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (parts de résidence principale, bois et forêts, biens professionnels).', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', etapes: ['Lister tous vos actifs immobiliers et financiers', 'Identifier les actifs exonérés (biens pro, forêts, résidence principale à 30%)', 'Calculer le passif déductible (dettes, emprunts)', 'Mandater un fiscaliste pour sécuriser la déclaration IFI'], partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
   }
   if (alertes.some(a => a.toLowerCase().includes('étranger') || a.toLowerCase().includes('international'))) {

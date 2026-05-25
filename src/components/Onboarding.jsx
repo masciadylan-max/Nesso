@@ -19,7 +19,7 @@ ALERTES ⚠️ (signaler + expliquer en 1 phrase) :
 - Âge >67 ans → fenêtre AV bientôt moins avantageuse
 - Communauté universelle + enfants → clause attribution intégrale à vérifier
 - Bien étranger → double imposition possible
-- Patrimoine >1,3M€ → IFI potentiel
+- Patrimoine immobilier net >1,3M€ (par foyer fiscal) → IFI potentiel
 - Famille recomposée → réserve héréditaire à protéger
 - AV sans bénéficiaire → perd son avantage fiscal
 
