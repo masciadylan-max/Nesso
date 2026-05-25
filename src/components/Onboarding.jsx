@@ -130,7 +130,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     const res = await fetch('/anthropic/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, system: SYSTEM_PROMPT, messages: history.map(m => ({ role: m.role, content: m.content })) }),
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }], messages: history.map(m => ({ role: m.role, content: m.content })) }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
