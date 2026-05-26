@@ -60,20 +60,31 @@ function SaveBanner({ onSave }) {
   );
 }
 
+// Détection synchrone du mode "password recovery" depuis l'URL.
+// Supabase ajoute type=recovery dans le hash (#) ou query (?) du lien email.
+// On vérifie AVANT le mount React pour ne pas rater l'event s'il fire trop vite.
+const detectRecoveryFromUrl = () => {
+  if (typeof window === 'undefined') return false;
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  return hash.includes('type=recovery') || search.includes('type=recovery');
+};
+
 export default function App() {
   // Rendu optimiste : on lit le localStorage de manière synchrone au mount
   // → l'app s'affiche immédiatement, la vérif Supabase tourne en background.
   const initialProfile = LS.get('nesso_user_profile', null);
   const initialActifs  = LS.get('nesso_user_actifs', null);
+  const initialRecovery = detectRecoveryFromUrl();
 
   const [authUser, setAuthUser]       = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [view, setView]               = useState(initialProfile ? 'dashboard' : 'onboarding');
-  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(initialRecovery);
   const [pov, setPov]                 = useState(initialProfile ? 'user' : 'user');
   const [actifs, setActifs]           = useState(initialActifs || ACTIFS);
   const [userProfile, setUserProfile] = useState(initialProfile);
-  const [showAuth, setShowAuth]       = useState(false);
+  const [showAuth, setShowAuth]       = useState(initialRecovery);
   const [showApiKey, setShowApiKey]   = useState(false);
   const [migrationError, setMigrationError] = useState(null);
   const [apiKey, setApiKey]           = useState(() => {
