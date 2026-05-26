@@ -79,8 +79,19 @@ export default function App() {
   });
 
   useEffect(() => {
+    console.log('[Nesso] App mount, init auth...');
+
+    // FILET DE SÉCURITÉ ABSOLU : même si Supabase ne répond jamais,
+    // l'app sort de l'écran de chargement après 4 secondes.
+    const hardTimeout = setTimeout(() => {
+      console.warn('[Nesso] Hard timeout 4s — forcing authLoading=false');
+      setAuthLoading(false);
+    }, 4000);
+
     // Charge la session existante au démarrage (gère le cas "pas connecté")
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[Nesso] getSession resolved, session:', session?.user?.email || 'none');
+      clearTimeout(hardTimeout);
       setAuthUser(session?.user ?? null);
       if (session?.user) {
         loadUserData(session.user.id);
@@ -97,7 +108,8 @@ export default function App() {
         setAuthLoading(false);
       }
     }).catch(err => {
-      console.error('getSession error:', err);
+      console.error('[Nesso] getSession error:', err);
+      clearTimeout(hardTimeout);
       setAuthLoading(false);
     });
 
