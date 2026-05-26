@@ -400,44 +400,100 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
           </div>
 
           {/* Manifeste / Qui sommes-nous */}
-          <div style={{ marginTop: 56, padding: '0 8px' }}>
-            <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', textAlign: 'center', margin: '0 0 18px' }}>Notre manifeste</p>
-            <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 26, fontWeight: 700, textAlign: 'center', margin: '0 0 28px', lineHeight: 1.3 }}>
+          <div style={{ marginTop: 64, padding: '0 8px' }}>
+
+            {/* Ornement décoratif d'ouverture */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 24 }}>
+              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
+              <span style={{ color: '#C9A96E', fontSize: 14 }}>✦</span>
+              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
+            </div>
+
+            <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', textAlign: 'center', margin: '0 0 16px' }}>Notre manifeste</p>
+            <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 30, fontWeight: 700, textAlign: 'center', margin: '0 0 18px', lineHeight: 1.25, letterSpacing: '-0.01em' }}>
               La clarté patrimoniale n'est plus réservée aux familles aisées.
             </h2>
+            <p style={{ color: '#6B7280', fontSize: 15, lineHeight: 1.75, textAlign: 'center', maxWidth: 560, margin: '0 auto 40px', fontStyle: 'italic' }}>
+              Une succession bien préparée peut représenter <strong style={{ color: '#1B2B4B', fontStyle: 'normal' }}>des dizaines de milliers d'euros</strong> conservés par votre famille. Jusqu'ici, ce savoir-faire restait inaccessible à la plupart des foyers.
+            </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginBottom: 32 }}>
-              <div style={{ background: 'white', borderRadius: 12, padding: 22, border: '1px solid rgba(27,43,75,0.06)' }}>
-                <p style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: '0 0 6px', fontFamily: 'Cormorant Garamond, serif' }}>×3</p>
-                <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 500, margin: '0 0 4px' }}>Recettes de l'État</p>
-                <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.6, margin: 0 }}>
-                  Les droits de succession perçus par l'État ont plus que triplé ces 15 dernières années.
-                </p>
+            {/* Tableau de constats — style éditorial */}
+            <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(27,43,75,0.08)', marginBottom: 36, boxShadow: '0 4px 24px rgba(27,43,75,0.04)' }}>
+              <div style={{ background: '#F5F0EA', padding: '12px 24px', borderBottom: '1px solid rgba(27,43,75,0.08)' }}>
+                <p style={{ color: '#1B2B4B', fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: 0 }}>Le constat — 15 dernières années</p>
               </div>
-              <div style={{ background: 'white', borderRadius: 12, padding: 22, border: '1px solid rgba(27,43,75,0.06)' }}>
-                <p style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: '0 0 6px', fontFamily: 'Cormorant Garamond, serif' }}>0%</p>
-                <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 500, margin: '0 0 4px' }}>Évolution des abattements</p>
-                <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.6, margin: 0 }}>
-                  L'immobilier a explosé, mais les tranches d'abattement n'ont pas bougé. La fiscalité réelle augmente silencieusement.
+
+              {[
+                {
+                  icon: '↑',
+                  chiffre: '× 3',
+                  titre: 'Les recettes de l\'État',
+                  desc: 'Les droits de succession perçus par l\'État ont plus que triplé en 15 ans.',
+                  ton: 'rouge',
+                },
+                {
+                  icon: '=',
+                  chiffre: '0 %',
+                  titre: 'L\'évolution des abattements',
+                  desc: 'L\'immobilier et le patrimoine ont explosé, mais les seuils d\'exonération n\'ont pas bougé. La fiscalité réelle progresse en silence.',
+                  ton: 'orange',
+                },
+                {
+                  icon: '◐',
+                  chiffre: '~ 1 %',
+                  titre: 'Les familles vraiment équipées',
+                  desc: 'Seules celles qui pouvaient s\'offrir notaire de famille, fiscaliste, gestionnaire de patrimoine ou family office optimisaient réellement leur transmission.',
+                  ton: 'navy',
+                },
+              ].map((c, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 22, padding: '22px 24px', borderTop: i > 0 ? '1px solid #F5F0EA' : 'none' }}>
+                  <div style={{ flex: '0 0 56px', textAlign: 'center' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: c.ton === 'rouge' ? '#FEF2F2' : c.ton === 'orange' ? '#FFF8F0' : '#F0F4FF', color: c.ton === 'rouge' ? '#E24B4A' : c.ton === 'orange' ? '#C9A96E' : '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, margin: '0 auto' }}>
+                      {c.icon}
+                    </div>
+                  </div>
+                  <div style={{ flex: '0 0 90px' }}>
+                    <p className="font-serif" style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: 0, lineHeight: 1 }}>{c.chiffre}</p>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 600, margin: '0 0 4px' }}>{c.titre}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 13, lineHeight: 1.65, margin: 0 }}>{c.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bloc Mission — style citation éditoriale */}
+            <div style={{ position: 'relative', background: 'linear-gradient(135deg, #1B2B4B 0%, #243656 100%)', borderRadius: 16, padding: '40px 36px 32px', color: 'white', overflow: 'hidden' }}>
+              {/* Guillemet décoratif */}
+              <span className="font-serif" style={{ position: 'absolute', top: 4, left: 22, fontSize: 110, color: 'rgba(201,169,110,0.18)', lineHeight: 1, pointerEvents: 'none' }}>“</span>
+
+              <div style={{ position: 'relative' }}>
+                <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', margin: '0 0 16px' }}>Notre conviction</p>
+
+                <p className="font-serif" style={{ fontSize: 22, lineHeight: 1.5, margin: '0 0 18px', color: 'white', fontWeight: 400 }}>
+                  Aujourd'hui, l'IA permet à chacun de prendre en main son patrimoine et d'anticiper sa succession <span style={{ color: '#C9A96E' }}>à un coût quasi nul</span>.
                 </p>
-              </div>
-              <div style={{ background: 'white', borderRadius: 12, padding: 22, border: '1px solid rgba(27,43,75,0.06)' }}>
-                <p style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: '0 0 6px', fontFamily: 'Cormorant Garamond, serif' }}>1%</p>
-                <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 500, margin: '0 0 4px' }}>Familles équipées</p>
-                <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.6, margin: 0 }}>
-                  Seules les familles qui pouvaient s'offrir notaires, fiscalistes et family offices optimisaient leur succession.
+
+                <p style={{ fontSize: 15, lineHeight: 1.75, margin: '0 0 28px', color: 'rgba(255,255,255,0.78)' }}>
+                  C'est la mission de <strong style={{ color: '#C9A96E' }}>Nesso</strong> : apporter cette connaissance et cette clarté à tous les foyers, et casser l'inégalité d'accès au conseil patrimonial.
                 </p>
+
+                {/* Signature */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 18, borderTop: '1px solid rgba(201,169,110,0.2)' }}>
+                  <div style={{ width: 40, height: 1, background: 'rgba(201,169,110,0.45)' }} />
+                  <p className="font-serif" style={{ fontStyle: 'italic', color: '#C9A96E', fontSize: 16, margin: 0, fontWeight: 400 }}>
+                    L'équipe Nesso
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div style={{ background: 'linear-gradient(135deg, #1B2B4B 0%, #243656 100%)', borderRadius: 14, padding: '32px 28px', color: 'white' }}>
-              <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', margin: '0 0 12px' }}>Notre mission</p>
-              <p style={{ fontSize: 16, lineHeight: 1.75, margin: '0 0 14px', color: 'rgba(255,255,255,0.92)' }}>
-                Aujourd'hui, l'IA permet à chacun de prendre en main son patrimoine et d'anticiper sa succession <strong style={{ color: '#C9A96E' }}>à un coût quasi nul</strong>.
-              </p>
-              <p style={{ fontSize: 15, lineHeight: 1.75, margin: 0, color: 'rgba(255,255,255,0.75)' }}>
-                C'est la mission de Nesso : apporter cette connaissance et cette clarté à tous les foyers, et casser l'inégalité d'accès au conseil patrimonial.
-              </p>
+            {/* Ornement décoratif de fermeture */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 32 }}>
+              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
+              <span style={{ color: '#C9A96E', fontSize: 10 }}>◆</span>
+              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
             </div>
           </div>
           </>
