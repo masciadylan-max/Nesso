@@ -7,7 +7,7 @@ const NAV_ITEMS = [
   { id: 'aide',      label: 'Aide',            icon: '◇' },
 ];
 
-export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset }) {
+export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, onLogout, userEmail }) {
   return (
     <>
       {/* Desktop */}
@@ -37,6 +37,12 @@ export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset }
               {FAMILLE.map(p => <option key={p.id} value={p.id} style={{ background: '#1B2B4B' }}>{p.prenom}</option>)}
             </select>
 <button onClick={onApiKey} title="Configurer la clé API" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>⚙</button>
+            {userEmail && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: 10 }}>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</span>
+                <button onClick={onLogout} title="Se déconnecter" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>↪</button>
+              </div>
+            )}
           </div>
         </div>
       </nav>
