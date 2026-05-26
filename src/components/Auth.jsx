@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 
-export default function Auth({ embedded = false, onClose }) {
-  const [mode, setMode]         = useState('login'); // 'login' | 'register' | 'reset'
+export default function Auth({ embedded = false, onClose, recoveryMode = false }) {
+  // Si l'user arrive depuis le lien de reset email → mode 'newpassword'
+  const [mode, setMode]         = useState(recoveryMode ? 'newpassword' : 'login'); // 'login' | 'register' | 'reset' | 'newpassword'
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [prenom, setPrenom]     = useState('');
@@ -38,7 +39,16 @@ export default function Auth({ embedded = false, onClose }) {
           redirectTo: window.location.origin,
         });
         if (error) throw error;
-        setSuccess('Email de réinitialisation envoyé. Vérifiez votre boîte mail.');
+        setSuccess('Email de réinitialisation envoyé. Vérifiez votre boîte mail (et vos spams).');
+
+      } else if (mode === 'newpassword') {
+        if (password.length < 6) { setError('Le mot de passe doit faire au moins 6 caractères.'); setLoading(false); return; }
+        const { error } = await supabase.auth.updateUser({ password });
+        if (error) throw error;
+        setSuccess('Mot de passe mis à jour ! Vous êtes maintenant connecté.');
+        // Nettoyer l'URL (Supabase laisse le token dans le hash)
+        if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
+        setTimeout(() => { if (onClose) onClose(); }, 1500);
       }
     } catch (err) {
       const msgs = {
@@ -46,6 +56,7 @@ export default function Auth({ embedded = false, onClose }) {
         'Email not confirmed': 'Confirmez votre email avant de vous connecter.',
         'User already registered': 'Un compte existe déjà avec cet email.',
         'Password should be at least 6 characters': 'Le mot de passe doit faire au moins 6 caractères.',
+        'New password should be different from the old password.': 'Le nouveau mot de passe doit être différent de l\'ancien.',
       };
       setError(msgs[err.message] || err.message);
     } finally {
@@ -53,7 +64,12 @@ export default function Auth({ embedded = false, onClose }) {
     }
   };
 
-  const titles = { login: 'Connexion', register: 'Créer un compte', reset: 'Mot de passe oublié' };
+  const titles = {
+    login: 'Connexion',
+    register: 'Créer un compte',
+    reset: 'Mot de passe oublié',
+    newpassword: 'Définir un nouveau mot de passe',
+  };
 
   return (
     <div style={{ minHeight: embedded ? 'auto' : '100vh', background: embedded ? 'transparent' : '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: embedded ? 0 : '24px' }}>
@@ -95,21 +111,32 @@ export default function Auth({ embedded = false, onClose }) {
             </div>
           )}
 
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Email</label>
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="votre@email.fr" required autoComplete="email"
-              style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
-            />
-          </div>
+          {/* Email caché en mode 'newpassword' : la session de récupération est déjà active */}
+          {mode !== 'newpassword' && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Email</label>
+              <input
+                type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="votre@email.fr" required autoComplete="email"
+                style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
+              />
+            </div>
+          )}
+
+          {mode === 'newpassword' && (
+            <p style={{ color: '#6B7280', fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
+              Choisissez un nouveau mot de passe sécurisé (minimum 6 caractères).
+            </p>
+          )}
 
           {mode !== 'reset' && (
             <div style={{ marginBottom: mode === 'register' ? 14 : 20 }}>
-              <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Mot de passe</label>
+              <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
+                {mode === 'newpassword' ? 'Nouveau mot de passe' : 'Mot de passe'}
+              </label>
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)}
-                placeholder={mode === 'register' ? 'Minimum 6 caractères' : '••••••••'} required autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                placeholder={mode === 'register' || mode === 'newpassword' ? 'Minimum 6 caractères' : '••••••••'} required autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
               />
             </div>
@@ -134,7 +161,7 @@ export default function Auth({ embedded = false, onClose }) {
 
           <button type="submit" className="btn-navy" disabled={loading}
             style={{ width: '100%', padding: '12px', fontSize: 15, opacity: loading ? 0.7 : 1, cursor: loading ? 'wait' : 'pointer' }}>
-            {loading ? '...' : mode === 'login' ? 'Se connecter' : mode === 'register' ? 'Créer mon compte' : 'Envoyer le lien'}
+            {loading ? '...' : mode === 'login' ? 'Se connecter' : mode === 'register' ? 'Créer mon compte' : mode === 'newpassword' ? 'Mettre à jour mon mot de passe' : 'Envoyer le lien'}
           </button>
         </form>
 

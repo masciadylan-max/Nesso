@@ -69,6 +69,7 @@ export default function App() {
   const [authUser, setAuthUser]       = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [view, setView]               = useState(initialProfile ? 'dashboard' : 'onboarding');
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
   const [pov, setPov]                 = useState(initialProfile ? 'user' : 'user');
   const [actifs, setActifs]           = useState(initialActifs || ACTIFS);
   const [userProfile, setUserProfile] = useState(initialProfile);
@@ -97,6 +98,16 @@ export default function App() {
         if (session?.user) {
           try { await loadUserData(session.user.id); } catch (e) { console.error('loadUserData error:', e); }
         }
+        clearTimeout(spinnerTimeout);
+        setAuthChecking(false);
+        return;
+      }
+
+      // PASSWORD_RECOVERY : user a cliqué sur le lien de réinitialisation reçu par email
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthUser(session?.user ?? null);
+        setPasswordRecovery(true);
+        setShowAuth(true);
         clearTimeout(spinnerTimeout);
         setAuthChecking(false);
         return;
@@ -246,7 +257,7 @@ export default function App() {
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
             onClick={e => { if (e.target === e.currentTarget) setShowAuth(false); }}>
             <div style={{ width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', borderRadius: 16 }}>
-              <Auth embedded onClose={() => setShowAuth(false)} />
+              <Auth embedded onClose={() => { setShowAuth(false); setPasswordRecovery(false); }} recoveryMode={passwordRecovery} />
             </div>
           </div>
         )}
@@ -303,7 +314,7 @@ export default function App() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
           onClick={e => { if (e.target === e.currentTarget) setShowAuth(false); }}>
           <div style={{ width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', borderRadius: 16 }}>
-            <Auth embedded onClose={() => setShowAuth(false)} />
+            <Auth embedded onClose={() => { setShowAuth(false); setPasswordRecovery(false); }} recoveryMode={passwordRecovery} />
           </div>
         </div>
       )}
