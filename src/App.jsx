@@ -84,19 +84,26 @@ export default function App() {
   });
 
   useEffect(() => {
+    // Timeout absolu : si Supabase ne répond pas en 5s, on cache le spinner.
+    // Évite un spinner infini en cas de panne réseau ou session corrompue.
+    const spinnerTimeout = setTimeout(() => setAuthChecking(false), 5000);
+
     // Vérif Supabase en arrière-plan, sans bloquer l'affichage
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setAuthUser(session?.user ?? null);
       if (session?.user) {
-        // Session active : récupère les données serveur (peut écraser le cache local)
-        await loadUserData(session.user.id);
+        try {
+          await loadUserData(session.user.id);
+        } catch (e) {
+          console.error('loadUserData error:', e);
+        }
       }
+      clearTimeout(spinnerTimeout);
       setAuthChecking(false);
-      // Pas de session : on garde l'affichage initial (depuis localStorage ou onboarding)
     }).catch(err => {
       console.error('getSession error:', err);
+      clearTimeout(spinnerTimeout);
       setAuthChecking(false);
-      // En cas d'erreur réseau : on garde l'affichage initial, pas de blocage
     });
 
     // Écoute les changements ultérieurs (login, logout, refresh token)
