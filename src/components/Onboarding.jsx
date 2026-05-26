@@ -252,6 +252,17 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
         pays: a.pays || 'France',
       }));
     }
+
+    // Cohérence des alertes : retirer 'ifi' si le patrimoine immobilier net
+    // du foyer ne dépasse pas le seuil légal (1,3M€). Évite que l'alerte reste
+    // stale après filtrage des biens de tiers.
+    const patrimoineImmoNet = out.actifs
+      .filter(a => a.categorie === 'immobilier')
+      .reduce((s, a) => s + (a.valeur || 0) * (a.type === 'Résidence principale' ? 0.70 : 1), 0);
+    if (patrimoineImmoNet <= 1300000) {
+      out.alertes = out.alertes.filter(a => !a.toLowerCase().includes('ifi'));
+    }
+
     return out;
   };
 

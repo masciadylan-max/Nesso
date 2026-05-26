@@ -37,7 +37,10 @@ const generateUserActions = (userProfile, patrimoine) => {
   const patrimoineImmoNet = (userProfile?.actifs || [])
     .filter(a => a.categorie === 'immobilier')
     .reduce((sum, a) => sum + (a.valeur || 0) * (a.type === 'Résidence principale' ? 0.70 : 1), 0);
-  if (alertes.some(a => a.toLowerCase().includes('ifi')) || patrimoineImmoNet > 1300000) {
+  // IFI : on se fie UNIQUEMENT au calcul mathématique sur les actifs réels du foyer
+  // (et non à l'alerte 'ifi' générée par Haiku, qui peut rester stale si les biens
+  // ont été nettoyés a posteriori). Source de vérité : le patrimoine immobilier net.
+  if (patrimoineImmoNet > 1300000) {
     actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité IFI', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (parts de résidence principale, bois et forêts, biens professionnels).', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', etapes: ['Lister tous vos actifs immobiliers et financiers', 'Identifier les actifs exonérés (biens pro, forêts, résidence principale à 30%)', 'Calculer le passif déductible (dettes, emprunts)', 'Mandater un fiscaliste pour sécuriser la déclaration IFI'], partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
   }
   if (alertes.some(a => a.toLowerCase().includes('étranger') || a.toLowerCase().includes('international'))) {
