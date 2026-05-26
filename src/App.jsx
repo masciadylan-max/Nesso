@@ -245,8 +245,16 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span className="font-serif" style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700 }}>Nesso</span>
+      <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+        <span className="font-serif" style={{ color: '#C9A96E', fontSize: 32, fontWeight: 700, letterSpacing: '0.03em' }}>Nesso</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ color: '#7A7A8C', fontSize: 13 }}>Chargement</span>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9A96E', animation: `bounce 1.2s ${i * 0.18}s infinite` }} />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -254,8 +262,21 @@ export default function App() {
   if (view === 'onboarding') {
     return (
       <>
-        <Onboarding onComplete={handleComplete} apiKey={apiKey} onApiKey={() => setShowApiKey(true)} />
+        <Onboarding
+          onComplete={handleComplete}
+          apiKey={apiKey}
+          onApiKey={() => setShowApiKey(true)}
+          onLogin={() => setShowAuth(true)}
+        />
         <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
+        {showAuth && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+            onClick={e => { if (e.target === e.currentTarget) setShowAuth(false); }}>
+            <div style={{ width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', borderRadius: 16 }}>
+              <Auth embedded onClose={() => setShowAuth(false)} />
+            </div>
+          </div>
+        )}
       </>
     );
   }

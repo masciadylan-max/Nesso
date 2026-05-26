@@ -150,7 +150,7 @@ const renderText = (text) => {
   );
 };
 
-export default function Onboarding({ onComplete, apiKey, onApiKey }) {
+export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
   const [started, setStarted]   = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState('');
@@ -384,6 +384,18 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
                 Voir l'exemple sans remplir →
               </button>
             </div>
+
+            {/* Connexion pour utilisateurs existants */}
+            {onLogin && (
+              <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid #F0EBE4' }}>
+                <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0 }}>
+                  Vous avez déjà un compte ?{' '}
+                  <button onClick={onLogin} style={{ background: 'none', border: 'none', color: '#C9A96E', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', padding: 0, textDecoration: 'underline' }}>
+                    Se connecter →
+                  </button>
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 640 }}>
