@@ -84,32 +84,23 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Timeout absolu : si Supabase ne répond pas en 5s, on cache le spinner.
-    // Évite un spinner infini en cas de panne réseau ou session corrompue.
+    // Filet de sécurité : si Supabase ne fire jamais INITIAL_SESSION,
+    // le spinner disparaît quand même après 5s.
     const spinnerTimeout = setTimeout(() => setAuthChecking(false), 5000);
 
-    // Vérif Supabase en arrière-plan, sans bloquer l'affichage
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setAuthUser(session?.user ?? null);
-      if (session?.user) {
-        try {
-          await loadUserData(session.user.id);
-        } catch (e) {
-          console.error('loadUserData error:', e);
-        }
-      }
-      clearTimeout(spinnerTimeout);
-      setAuthChecking(false);
-    }).catch(err => {
-      console.error('getSession error:', err);
-      clearTimeout(spinnerTimeout);
-      setAuthChecking(false);
-    });
-
-    // Écoute les changements ultérieurs (login, logout, refresh token)
+    // onAuthStateChange gère TOUT : init (INITIAL_SESSION) + login + logout + refresh
+    // C'est le pattern recommandé par Supabase — plus fiable que getSession() qui peut hanger.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Ignorer l'event INITIAL_SESSION : déjà traité par getSession ci-dessus
-      if (event === 'INITIAL_SESSION') return;
+      // INITIAL_SESSION : premier event au démarrage, fire toujours (avec ou sans session)
+      if (event === 'INITIAL_SESSION') {
+        setAuthUser(session?.user ?? null);
+        if (session?.user) {
+          try { await loadUserData(session.user.id); } catch (e) { console.error('loadUserData error:', e); }
+        }
+        clearTimeout(spinnerTimeout);
+        setAuthChecking(false);
+        return;
+      }
 
       setAuthUser(session?.user ?? null);
       if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
