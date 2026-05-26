@@ -79,7 +79,6 @@ export default function App() {
   const initialRecovery = detectRecoveryFromUrl();
 
   const [authUser, setAuthUser]       = useState(null);
-  const [authChecking, setAuthChecking] = useState(true);
   const [view, setView]               = useState(initialProfile ? 'dashboard' : 'onboarding');
   const [passwordRecovery, setPasswordRecovery] = useState(initialRecovery);
   const [pov, setPov]                 = useState(initialProfile ? 'user' : 'user');
@@ -104,10 +103,6 @@ export default function App() {
   }, [view, authUser, userProfile]);
 
   useEffect(() => {
-    // Filet de sécurité : si Supabase ne fire jamais INITIAL_SESSION,
-    // le spinner disparaît quand même après 5s.
-    const spinnerTimeout = setTimeout(() => setAuthChecking(false), 5000);
-
     // onAuthStateChange gère TOUT : init (INITIAL_SESSION) + login + logout + refresh
     // C'est le pattern recommandé par Supabase — plus fiable que getSession() qui peut hanger.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -117,8 +112,6 @@ export default function App() {
         if (session?.user) {
           try { await loadUserData(session.user.id); } catch (e) { console.error('loadUserData error:', e); }
         }
-        clearTimeout(spinnerTimeout);
-        setAuthChecking(false);
         return;
       }
 
@@ -127,8 +120,6 @@ export default function App() {
         setAuthUser(session?.user ?? null);
         setPasswordRecovery(true);
         setShowAuth(true);
-        clearTimeout(spinnerTimeout);
-        setAuthChecking(false);
         return;
       }
 
@@ -253,14 +244,6 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
-  // Mini-spinner discret en haut à droite pendant la vérif Supabase
-  const AuthSpinner = () => authChecking ? (
-    <div style={{ position: 'fixed', top: 14, right: 16, display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(27,43,75,0.85)', backdropFilter: 'blur(4px)', color: 'rgba(255,255,255,0.85)', fontSize: 11, padding: '5px 11px', borderRadius: 20, zIndex: 150, fontFamily: 'DM Sans, sans-serif' }}>
-      <div style={{ width: 10, height: 10, border: '2px solid rgba(201,169,110,0.3)', borderTopColor: '#C9A96E', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-      <span>Synchronisation</span>
-    </div>
-  ) : null;
-
   if (view === 'onboarding') {
     return (
       <>
@@ -286,7 +269,6 @@ export default function App() {
           onApiKey={() => setShowApiKey(true)}
           onLogin={() => setShowAuth(true)}
         />
-        <AuthSpinner />
         <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
         {showAuth && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
@@ -311,7 +293,6 @@ export default function App() {
         userEmail={authUser?.email}
       />
 
-      <AuthSpinner />
 
       {/* Bug #6 : message d'erreur si la migration localStorage → Supabase a échoué */}
       {migrationError && (

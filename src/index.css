@@ -75,9 +75,6 @@ body {
   50%       { opacity: 0.4; }
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: #F5F0EA; }
