@@ -5,9 +5,15 @@ export const euro = (n) =>
 
 export const getPersonne = (id) => FAMILLE.find(p => p.id === id);
 
+// Bug #9 : pour l'user solo, l'actif est toujours 100% à lui — on divise
+// uniquement quand l'actif est partagé entre plusieurs propriétaires distincts.
+// Évite que l'affichage "Patrimoine" soit divisé par 2 si on évolue vers le partage.
 export const getPatrimoine = (id, actifs) =>
   actifs.filter(a => a.proprietaires.includes(id))
-    .reduce((s, a) => s + a.valeur / a.proprietaires.length, 0);
+    .reduce((s, a) => {
+      const nbProprios = Math.max(1, a.proprietaires.length);
+      return s + (a.valeur || 0) / nbProprios;
+    }, 0);
 
 export const getActifsByOwner = (id, actifs) =>
   actifs.filter(a => a.proprietaires.includes(id));

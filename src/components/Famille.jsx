@@ -22,6 +22,25 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
           <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>Basé sur vos réponses lors de l'audit</p>
         </div>
         <div className="card" style={{ padding: 32, marginBottom: 22 }}>
+          {/* Bug #4 : Parents (génération 0) si vivants */}
+          {userProfile.parents_en_vie && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 4, flexWrap: 'wrap' }}>
+                {['Père', 'Mère'].map(role => (
+                  <div key={role} style={{ textAlign: 'center', minWidth: 110 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F5F0EA', border: '2px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1B2B4B', fontWeight: 700, fontSize: 18, margin: '0 auto 8px' }}>
+                      {role[0]}
+                    </div>
+                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{role}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>En vie</p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+                <div style={{ width: 2, height: 32, background: '#C9A96E' }} />
+              </div>
+            </>
+          )}
           {/* User + conjoint */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
             <div style={{ textAlign: 'center', minWidth: 130 }}>

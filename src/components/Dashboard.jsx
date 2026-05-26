@@ -67,6 +67,10 @@ const generateUserActions = (userProfile, patrimoine) => {
   if (actions.length === 0) {
     actions.push({ urgence: 'vert', titreGenerique: 'Audit patrimonial', titre: 'Affiner votre profil patrimonial', description: 'Pour des recommandations personnalisées et des calculs précis, complétez votre profil en répondant à davantage de questions lors de l\'onboarding. Plus votre situation est détaillée, plus le plan d\'action sera ciblé et actionnable.', economieLabel: 'Recommandations sur mesure', economie: 0, coutLabel: 'Gratuit', cout: 0, delai: 'Dès maintenant', etapes: null, partenaire: null });
   }
+  // Bug #5 : trier par urgence avant de slicer — rouge > orange > vert
+  // pour ne jamais couper une alerte critique au profit d'une action mineure
+  const ordre = { rouge: 0, orange: 1, vert: 2 };
+  actions.sort((a, b) => (ordre[a.urgence] ?? 3) - (ordre[b.urgence] ?? 3));
   return actions.slice(0, 3);
 };
 

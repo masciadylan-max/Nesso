@@ -69,6 +69,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState(null);
   const [showAuth, setShowAuth]       = useState(false);
   const [showApiKey, setShowApiKey]   = useState(false);
+  const [migrationError, setMigrationError] = useState(null);
   const [apiKey, setApiKey]           = useState(() => {
     try {
       return localStorage.getItem('nesso_api_key') ||
@@ -78,8 +79,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Charge la session existante
+    // Bug #7 fix : guard pour empêcher double-call concurrent de loadUserData
+    let sessionHandled = false;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (sessionHandled) return; // si onAuthStateChange a déjà traité, on skip
+      sessionHandled = true;
       setAuthUser(session?.user ?? null);
       if (session?.user) loadUserData(session.user.id);
       else {
@@ -97,11 +102,15 @@ export default function App() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Bug #7 : ignorer l'event INITIAL_SESSION si getSession l'a déjà traité
+      if (event === 'INITIAL_SESSION' && sessionHandled) return;
+      sessionHandled = true;
+
       setAuthUser(session?.user ?? null);
       if (session?.user) {
         setShowAuth(false);
         // Vérifie si données existantes dans Supabase
-        const { data } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
+        const { data, error: fetchErr } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
         if (data) {
           // Compte existant → charger ses données
           setUserProfile(data.profile_json);
@@ -109,11 +118,24 @@ export default function App() {
           setPov(data.pov || 'user');
           setView('dashboard');
         } else {
-          // Nouveau compte → migrer depuis localStorage
+          // Nouveau compte → migrer depuis localStorage avec gestion d'erreur (bug #6)
           const savedProfile = LS.get('nesso_user_profile', null);
           const savedActifs  = LS.get('nesso_user_actifs', null);
           if (savedProfile) {
-            await saveToSupabase(session.user.id, { userProfile: savedProfile, actifs: savedActifs || ACTIFS, pov: 'user' });
+            try {
+              const { error: upsertErr } = await supabase.from('user_data').upsert({
+                id: session.user.id,
+                profile_json: savedProfile,
+                actifs_json: savedActifs || ACTIFS,
+                pov: 'user',
+                updated_at: new Date().toISOString(),
+              });
+              if (upsertErr) throw upsertErr;
+              setMigrationError(null);
+            } catch (e) {
+              console.error('Migration localStorage → Supabase échouée :', e);
+              setMigrationError('Vos données n\'ont pas pu être sauvegardées sur nos serveurs (problème réseau). Elles restent disponibles localement. Réessayez de vous reconnecter dans quelques minutes.');
+            }
             setUserProfile(savedProfile);
             setActifs(savedActifs || ACTIFS);
             setPov('user');
@@ -173,10 +195,23 @@ export default function App() {
 
   const handleSetActifs = async (newActifs) => {
     setActifs(newActifs);
+    // Bug #1 fix : synchroniser userProfile.actifs avec les actifs édités
+    // (sinon les calculs IFI / score dans Dashboard restent sur les anciennes valeurs)
+    let updatedProfile = userProfile;
+    if (userProfile) {
+      updatedProfile = {
+        ...userProfile,
+        actifs: newActifs.map(a => ({
+          nom: a.nom, categorie: a.categorie, valeur: a.valeur, type: a.type, pays: a.pays,
+        })),
+      };
+      setUserProfile(updatedProfile);
+    }
     if (authUser) {
-      await saveToSupabase(authUser.id, { userProfile, actifs: newActifs, pov });
+      await saveToSupabase(authUser.id, { userProfile: updatedProfile, actifs: newActifs, pov });
     } else {
       LS.set('nesso_user_actifs', newActifs);
+      if (updatedProfile) LS.set('nesso_user_profile', updatedProfile);
     }
   };
 
@@ -220,6 +255,16 @@ export default function App() {
         onLogout={authUser ? handleLogout : null}
         userEmail={authUser?.email}
       />
+
+      {/* Bug #6 : message d'erreur si la migration localStorage → Supabase a échoué */}
+      {migrationError && (
+        <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FECACA', padding: '12px 24px', textAlign: 'center' }}>
+          <p style={{ color: '#991B1B', fontSize: 13, margin: 0 }}>
+            ⚠ {migrationError}{' '}
+            <button onClick={() => setMigrationError(null)} style={{ background: 'none', border: 'none', color: '#991B1B', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>Fermer</button>
+          </p>
+        </div>
+      )}
 
       {/* Bannière sauvegarde si non connecté et audit terminé */}
       {!authUser && userProfile && (

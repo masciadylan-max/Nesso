@@ -85,29 +85,59 @@ LOGIQUE DE TRANCHAGE :
 
 Mieux vaut une estimation imparfaite qu'un champ vide. Tranche toujours.`;
 
+// Bug #3 : parsing JSON robuste — gère markdown ```json, texte autour, JSON tronqué
+const parseJsonRobust = (text) => {
+  if (!text) return null;
+  // Strip code fences ```json ... ``` ou ``` ... ```
+  let cleaned = text.replace(/```(?:json)?\s*/gi, '').replace(/```/g, '').trim();
+  // Premier essai : parser le texte nettoyé directement
+  try { return JSON.parse(cleaned); } catch {}
+  // Deuxième essai : extraire le plus grand bloc { ... } équilibré
+  const start = cleaned.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0, end = -1;
+  for (let i = start; i < cleaned.length; i++) {
+    if (cleaned[i] === '{') depth++;
+    else if (cleaned[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+  }
+  if (end === -1) return null;
+  try { return JSON.parse(cleaned.slice(start, end + 1)); } catch (e) {
+    console.error('parseJsonRobust failed:', e, 'on:', cleaned.slice(start, end + 1).slice(0, 200));
+    return null;
+  }
+};
+
 const extractUserData = async (history) => {
   if (history.length < 3) return null;
+  // Bug #8 : timeout de 20s sur l'extraction (au lieu d'attendre indéfiniment)
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
   try {
     const res = await fetch('/anthropic/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 800,
-        system: 'Tu es un extracteur de données JSON. Réponds UNIQUEMENT avec le JSON demandé, sans markdown.',
+        max_tokens: 1200, // Augmenté pour éviter les troncatures du JSON
+        system: 'Tu es un extracteur de données JSON. Réponds UNIQUEMENT avec le JSON demandé, sans markdown, sans texte avant ou après.',
         messages: [
-          ...history.slice(-20), // Limiter l'historique envoyé
+          ...history.slice(-20),
           { role: 'user', content: EXTRACTION_PROMPT }
         ]
       })
     });
+    clearTimeout(timeout);
     if (!res.ok) return null;
     const data = await res.json();
-    const text = data.content[0].text.trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) return JSON.parse(jsonMatch[0]);
-  } catch (e) { console.error('Extraction error:', e); }
-  return null;
+    const text = data.content?.[0]?.text || '';
+    return parseJsonRobust(text);
+  } catch (e) {
+    clearTimeout(timeout);
+    if (e.name === 'AbortError') console.error('Extraction timeout (20s)');
+    else console.error('Extraction error:', e);
+    return null;
+  }
 };
 
 // Rendu markdown minimal : **gras** → <strong>
@@ -250,8 +280,10 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     setMsgCount(newCount);
     try {
       const rawReply = await getReply(history, newCount);
-      const auditTermine = rawReply.includes('[AUDIT_COMPLET]');
-      const reply = rawReply.replace('[AUDIT_COMPLET]', '').trim();
+      // Bug #2 : détection robuste du signal de fin (tolère variantes : majuscules, espaces, accents, markdown)
+      const SIGNAL_REGEX = /\[?\s*audit[\s_-]*complet[\s_-]*\]?/i;
+      const auditTermine = SIGNAL_REGEX.test(rawReply);
+      const reply = rawReply.replace(/\[?\s*audit[\s_-]*complet[\s_-]*\]?/gi, '').trim();
       const updatedHistory = [...history, { role: 'assistant', content: reply }];
       setMessages(updatedHistory);
       saveMessages(updatedHistory);
