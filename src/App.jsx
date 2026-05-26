@@ -61,12 +61,16 @@ function SaveBanner({ onSave }) {
 }
 
 export default function App() {
+  // Rendu optimiste : on lit le localStorage de manière synchrone au mount
+  // → l'app s'affiche immédiatement, la vérif Supabase tourne en background.
+  const initialProfile = LS.get('nesso_user_profile', null);
+  const initialActifs  = LS.get('nesso_user_actifs', null);
+
   const [authUser, setAuthUser]       = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [view, setView]               = useState('onboarding');
-  const [pov, setPov]                 = useState('user');
-  const [actifs, setActifs]           = useState(ACTIFS);
-  const [userProfile, setUserProfile] = useState(null);
+  const [view, setView]               = useState(initialProfile ? 'dashboard' : 'onboarding');
+  const [pov, setPov]                 = useState(initialProfile ? 'user' : 'user');
+  const [actifs, setActifs]           = useState(initialActifs || ACTIFS);
+  const [userProfile, setUserProfile] = useState(initialProfile);
   const [showAuth, setShowAuth]       = useState(false);
   const [showApiKey, setShowApiKey]   = useState(false);
   const [migrationError, setMigrationError] = useState(null);
@@ -79,38 +83,17 @@ export default function App() {
   });
 
   useEffect(() => {
-    console.log('[Nesso] App mount, init auth...');
-
-    // FILET DE SÉCURITÉ ABSOLU : même si Supabase ne répond jamais,
-    // l'app sort de l'écran de chargement après 4 secondes.
-    const hardTimeout = setTimeout(() => {
-      console.warn('[Nesso] Hard timeout 4s — forcing authLoading=false');
-      setAuthLoading(false);
-    }, 4000);
-
-    // Charge la session existante au démarrage (gère le cas "pas connecté")
+    // Vérif Supabase en arrière-plan, sans bloquer l'affichage
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[Nesso] getSession resolved, session:', session?.user?.email || 'none');
-      clearTimeout(hardTimeout);
       setAuthUser(session?.user ?? null);
       if (session?.user) {
+        // Session active : récupère les données serveur (peut écraser le cache local)
         loadUserData(session.user.id);
-      } else {
-        // Pas connecté → charger depuis localStorage si dispo
-        const savedProfile = LS.get('nesso_user_profile', null);
-        const savedActifs  = LS.get('nesso_user_actifs', null);
-        if (savedProfile) {
-          setUserProfile(savedProfile);
-          setActifs(savedActifs || ACTIFS);
-          setPov('user');
-          setView('dashboard');
-        }
-        setAuthLoading(false);
       }
+      // Pas de session : on garde l'affichage initial (depuis localStorage ou onboarding)
     }).catch(err => {
-      console.error('[Nesso] getSession error:', err);
-      clearTimeout(hardTimeout);
-      setAuthLoading(false);
+      console.error('getSession error:', err);
+      // En cas d'erreur réseau : on garde l'affichage initial, pas de blocage
     });
 
     // Écoute les changements ultérieurs (login, logout, refresh token)
@@ -157,13 +140,11 @@ export default function App() {
         } catch (e) {
           console.error('Auth state change error:', e);
         }
-        setAuthLoading(false);
       } else if (event === 'SIGNED_OUT') {
         setView('onboarding');
         setUserProfile(null);
         setActifs(ACTIFS);
         LS.del('nesso_view', 'nesso_pov', 'nesso_user_profile', 'nesso_user_actifs');
-        setAuthLoading(false);
       }
     });
 
@@ -177,10 +158,8 @@ export default function App() {
       setActifs(data.actifs_json || ACTIFS);
       setPov(data.pov || 'user');
       setView('dashboard');
-    } else {
-      setView('onboarding');
     }
-    setAuthLoading(false);
+    // Si pas de données pour ce user, on garde l'affichage initial (onboarding)
   };
 
   const handleComplete = async (userData) => {
@@ -242,22 +221,6 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
-
-  if (authLoading) {
-    return (
-      <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-        <span className="font-serif" style={{ color: '#C9A96E', fontSize: 32, fontWeight: 700, letterSpacing: '0.03em' }}>Nesso</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ color: '#7A7A8C', fontSize: 13 }}>Chargement</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {[0, 1, 2].map(i => (
-              <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: '#C9A96E', animation: `bounce 1.2s ${i * 0.18}s infinite` }} />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (view === 'onboarding') {
     return (
