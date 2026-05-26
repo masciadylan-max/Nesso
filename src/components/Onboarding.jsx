@@ -4,17 +4,18 @@ import { getDemoResponse } from '../utils.js';
 const SYSTEM_PROMPT = `Tu es le conseiller patrimonial Nesso. Style : chaleureux, ultra-concis. 2-3 phrases max par message. Texte brut uniquement — aucun markdown (pas de **, pas de #, pas de tirets listes). Ne donne JAMAIS de recommandations dans le chat : ton rôle est uniquement de collecter des informations.
 
 QUESTIONS dans l'ordre (1 seule à la fois) :
-1. Niveau de connaissance : novice / intermédiaire / expert
-2. Âge, situation civile (marié/pacsé/concubin/célibataire), régime matrimonial si marié
-3. Prénom, prénom conjoint, prénoms et âges des enfants, parents encore en vie ?
-4. Famille recomposée ? Enfants de plusieurs unions ? Demi-frères/sœurs ?
-5. Testament ou donation existants ? (Si non : passer immédiatement, ne pas approfondir)
-6. Immobilier : chaque bien — type, valeur, crédit, location, France ou étranger, en nom propre ou SCI
-7. Financier : vos assurances-vie (montant, bénéficiaires à jour ?), PEA, PER, liquidités
-8. Retraite : régime(s), réversion prévue ?
-9. Situation pro : salarié / TNS / libéral / dirigeant / retraité — si société : valeur estimée ?
-10. Donations passées ? Montant et date ? (abattement rechargeable tous les 15 ans)
-11. Objectifs prioritaires + attendez-vous un héritage de vos parents ?
+1. Niveau de connaissance patrimoniale : novice / intermédiaire / expert
+2. Vous : prénom, âge, profession, situation civile (marié/pacsé/concubin/célibataire), régime matrimonial si marié
+3. Conjoint (si applicable) : prénom, âge, profession
+4. Enfants : prénoms et âges (et précise s'ils sont d'une union précédente)
+5. Parents encore en vie ? Si oui âges approximatifs
+6. Famille recomposée ? Demi-frères/sœurs ?
+7. Testament ou donation existants ? (Si non : passer immédiatement, ne pas approfondir)
+8. Immobilier : chaque bien — type, valeur, crédit, location, France ou étranger, en nom propre ou SCI
+9. Financier : vos assurances-vie (montant, bénéficiaires à jour ?), PEA, PER, liquidités
+10. Retraite : régime(s), réversion prévue ? — si société : valeur estimée ?
+11. Donations passées ? Montant et date ? (abattement rechargeable tous les 15 ans)
+12. Objectifs prioritaires + attendez-vous un héritage de vos parents ?
 
 RÈGLE : si l'utilisateur répond "non", "aucun", "pas de X" — passer à la question suivante sans relancer.
 
@@ -115,8 +116,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 350,
+        model: 'claude-haiku-4-5',
+        max_tokens: 500,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         messages: history.slice(-18).map(m => ({ role: m.role, content: m.content }))
       }),
