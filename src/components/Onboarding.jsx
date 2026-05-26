@@ -427,22 +427,24 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
                 {
                   icon: '↑',
                   chiffre: '× 3',
-                  titre: 'Les recettes de l\'État',
-                  desc: 'Les droits de succession perçus par l\'État ont plus que triplé en 15 ans.',
+                  titre: 'Les recettes de l\'État sur les successions',
+                  desc: 'De 7 milliards € en 2011 à 21,2 milliards € en 2025 : les droits de succession ont triplé en moins de 15 ans.',
+                  source: 'Source : DGFiP',
                   ton: 'rouge',
                 },
                 {
                   icon: '=',
-                  chiffre: '0 %',
-                  titre: 'L\'évolution des abattements',
-                  desc: 'L\'immobilier et le patrimoine ont explosé, mais les seuils d\'exonération n\'ont pas bougé. La fiscalité réelle progresse en silence.',
+                  chiffre: '100 k€',
+                  titre: 'L\'abattement parent-enfant, inchangé depuis 2012',
+                  desc: 'Le seuil d\'exonération n\'a pas bougé depuis 13 ans. Pendant ce temps, le prix moyen de l\'immobilier en France a augmenté de plus de 30 %. La fiscalité réelle progresse en silence.',
+                  source: 'Source : article 779 du CGI',
                   ton: 'orange',
                 },
                 {
                   icon: '◐',
-                  chiffre: '~ 1 %',
+                  chiffre: 'Une minorité',
                   titre: 'Les familles vraiment équipées',
-                  desc: 'Seules celles qui pouvaient s\'offrir notaire de famille, fiscaliste, gestionnaire de patrimoine ou family office optimisaient réellement leur transmission.',
+                  desc: 'Seules les familles qui pouvaient s\'offrir notaire de famille, fiscaliste, gestionnaire de patrimoine ou family office optimisaient réellement leur transmission.',
                   ton: 'navy',
                 },
               ].map((c, i) => (
@@ -452,12 +454,15 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
                       {c.icon}
                     </div>
                   </div>
-                  <div style={{ flex: '0 0 90px' }}>
-                    <p className="font-serif" style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: 0, lineHeight: 1 }}>{c.chiffre}</p>
+                  <div style={{ flex: '0 0 110px', display: 'flex', alignItems: 'center' }}>
+                    <p className="font-serif" style={{ color: '#C9A96E', fontSize: c.chiffre.length > 4 ? 19 : 28, fontWeight: 700, margin: 0, lineHeight: 1.05 }}>{c.chiffre}</p>
                   </div>
                   <div style={{ flex: 1 }}>
                     <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 600, margin: '0 0 4px' }}>{c.titre}</p>
-                    <p style={{ color: '#7A7A8C', fontSize: 13, lineHeight: 1.65, margin: 0 }}>{c.desc}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 13, lineHeight: 1.65, margin: '0 0 6px' }}>{c.desc}</p>
+                    {c.source && (
+                      <p style={{ color: '#A8A8B8', fontSize: 11, fontStyle: 'italic', margin: 0 }}>{c.source}</p>
+                    )}
                   </div>
                 </div>
               ))}
