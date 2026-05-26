@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 
-export default function Auth() {
+export default function Auth({ embedded = false, onClose }) {
   const [mode, setMode]         = useState('login'); // 'login' | 'register' | 'reset'
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -56,13 +56,15 @@ export default function Auth() {
   const titles = { login: 'Connexion', register: 'Créer un compte', reset: 'Mot de passe oublié' };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+    <div style={{ minHeight: embedded ? 'auto' : '100vh', background: embedded ? 'transparent' : '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: embedded ? 0 : '24px' }}>
 
-      {/* Logo */}
-      <div style={{ marginBottom: 32, textAlign: 'center' }}>
-        <span className="font-serif" style={{ color: '#1B2B4B', fontSize: 36, fontWeight: 700, letterSpacing: '0.03em' }}>Nesso</span>
-        <p style={{ color: '#7A7A8C', fontSize: 14, marginTop: 6 }}>Votre conseiller patrimonial familial</p>
-      </div>
+      {/* Logo — seulement hors modal */}
+      {!embedded && (
+        <div style={{ marginBottom: 32, textAlign: 'center' }}>
+          <span className="font-serif" style={{ color: '#1B2B4B', fontSize: 36, fontWeight: 700, letterSpacing: '0.03em' }}>Nesso</span>
+          <p style={{ color: '#7A7A8C', fontSize: 14, marginTop: 6 }}>Votre conseiller patrimonial familial</p>
+        </div>
+      )}
 
       {/* Card */}
       <div className="card" style={{ width: '100%', maxWidth: 420, padding: '36px 32px' }}>

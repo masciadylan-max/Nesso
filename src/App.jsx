@@ -17,7 +17,6 @@ const LS = {
   del: (...keys) => { try { keys.forEach(k => localStorage.removeItem(k)); } catch {} },
 };
 
-// Sauvegarde les données utilisateur dans Supabase
 const saveToSupabase = async (userId, { userProfile, actifs, pov }) => {
   await supabase.from('user_data').upsert({
     id: userId,
@@ -30,15 +29,11 @@ const saveToSupabase = async (userId, { userProfile, actifs, pov }) => {
 
 function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
   const [val, setVal] = useState(apiKey || '');
-  const save = () => {
-    localStorage.setItem('nesso_api_key', val);
-    setApiKey(val);
-    onClose();
-  };
+  const save = () => { localStorage.setItem('nesso_api_key', val); setApiKey(val); onClose(); };
   return (
     <Modal open={open} onClose={onClose} title="Clé API Anthropic">
       <p style={{ color: '#6B7280', fontSize: 14, lineHeight: 1.7, marginBottom: 20 }}>
-        Nécessaire pour activer le vrai Claude dans l'onboarding et le chat. Stockée uniquement dans votre navigateur — jamais envoyée à nos serveurs.
+        Nécessaire pour activer le vrai Claude dans l'onboarding et le chat. Stockée uniquement dans votre navigateur.
       </p>
       <div style={{ marginBottom: 16 }}>
         <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 7 }}>Votre clé API (sk-ant-...)</label>
@@ -46,22 +41,35 @@ function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
           style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
       </div>
       <button className="btn-navy" onClick={save} style={{ width: '100%' }}>Enregistrer</button>
-      <p style={{ color: '#7A7A8C', fontSize: 11, textAlign: 'center', marginTop: 12 }}>
-        Obtenez votre clé sur <strong>console.anthropic.com</strong>
-      </p>
+      <p style={{ color: '#7A7A8C', fontSize: 11, textAlign: 'center', marginTop: 12 }}>Obtenez votre clé sur <strong>console.anthropic.com</strong></p>
     </Modal>
   );
 }
 
+// Bannière "Sauvegardez votre audit" pour les utilisateurs non connectés
+function SaveBanner({ onSave }) {
+  return (
+    <div style={{ background: 'linear-gradient(135deg, #1B2B4B 0%, #243656 100%)', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
+      <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, margin: 0 }}>
+        ✦ <strong style={{ color: '#C9A96E' }}>Votre analyse n'est pas sauvegardée</strong> — créez un compte gratuit pour y accéder depuis n'importe quel appareil.
+      </p>
+      <button onClick={onSave} className="btn-gold" style={{ fontSize: 13, padding: '7px 18px', whiteSpace: 'nowrap' }}>
+        Sauvegarder mon audit →
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
-  const [authUser, setAuthUser]         = useState(null);   // session Supabase
-  const [authLoading, setAuthLoading]   = useState(true);   // vrai chargement initial
-  const [view, setView]                 = useState('onboarding');
-  const [pov, setPov]                   = useState('user');
-  const [actifs, setActifs]             = useState(ACTIFS);
-  const [userProfile, setUserProfile]   = useState(null);
-  const [showApiKey, setShowApiKey]     = useState(false);
-  const [apiKey, setApiKey]             = useState(() => {
+  const [authUser, setAuthUser]       = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [view, setView]               = useState('onboarding');
+  const [pov, setPov]                 = useState('user');
+  const [actifs, setActifs]           = useState(ACTIFS);
+  const [userProfile, setUserProfile] = useState(null);
+  const [showAuth, setShowAuth]       = useState(false);
+  const [showApiKey, setShowApiKey]   = useState(false);
+  const [apiKey, setApiKey]           = useState(() => {
     try {
       return localStorage.getItem('nesso_api_key') ||
              import.meta.env.VITE_ANTHROPIC_API_KEY ||
@@ -69,21 +77,55 @@ export default function App() {
     } catch { return 'proxy'; }
   });
 
-  // ── Écoute l'état d'authentification Supabase ──
   useEffect(() => {
+    // Charge la session existante
     supabase.auth.getSession().then(({ data: { session } }) => {
       setAuthUser(session?.user ?? null);
       if (session?.user) loadUserData(session.user.id);
-      else setAuthLoading(false);
+      else {
+        // Pas connecté → charger depuis localStorage si dispo
+        const savedProfile = LS.get('nesso_user_profile', null);
+        const savedActifs  = LS.get('nesso_user_actifs', null);
+        if (savedProfile) {
+          setUserProfile(savedProfile);
+          setActifs(savedActifs || ACTIFS);
+          setPov('user');
+          setView('dashboard');
+        }
+        setAuthLoading(false);
+      }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setAuthUser(session?.user ?? null);
-      if (session?.user) loadUserData(session.user.id);
-      else {
+      if (session?.user) {
+        setShowAuth(false);
+        // Vérifie si données existantes dans Supabase
+        const { data } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
+        if (data) {
+          // Compte existant → charger ses données
+          setUserProfile(data.profile_json);
+          setActifs(data.actifs_json || ACTIFS);
+          setPov(data.pov || 'user');
+          setView('dashboard');
+        } else {
+          // Nouveau compte → migrer depuis localStorage
+          const savedProfile = LS.get('nesso_user_profile', null);
+          const savedActifs  = LS.get('nesso_user_actifs', null);
+          if (savedProfile) {
+            await saveToSupabase(session.user.id, { userProfile: savedProfile, actifs: savedActifs || ACTIFS, pov: 'user' });
+            setUserProfile(savedProfile);
+            setActifs(savedActifs || ACTIFS);
+            setPov('user');
+            setView('dashboard');
+          }
+        }
+        setAuthLoading(false);
+      } else if (event === 'SIGNED_OUT') {
         setView('onboarding');
         setUserProfile(null);
         setActifs(ACTIFS);
+        LS.del('nesso_view', 'nesso_pov', 'nesso_user_profile', 'nesso_user_actifs');
         setAuthLoading(false);
       }
     });
@@ -91,27 +133,19 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // ── Charge les données depuis Supabase ──
   const loadUserData = async (userId) => {
-    const { data, error } = await supabase
-      .from('user_data')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
+    const { data, error } = await supabase.from('user_data').select('*').eq('id', userId).single();
     if (!error && data) {
       setUserProfile(data.profile_json);
       setActifs(data.actifs_json || ACTIFS);
       setPov(data.pov || 'user');
       setView('dashboard');
     } else {
-      // Pas encore de données → onboarding
       setView('onboarding');
     }
     setAuthLoading(false);
   };
 
-  // ── Fin onboarding → sauvegarde ──
   const handleComplete = async (userData) => {
     const userActifs = userData
       ? (userData.actifs || []).filter(a => a.valeur > 0).map((a, i) => ({
@@ -120,7 +154,6 @@ export default function App() {
           proprietaires: ['user'], credit: false, note: null, beneficiaire: null,
         }))
       : ACTIFS;
-
     const newProfile = userData || null;
     const newPov     = userData ? 'user' : 'lucas';
 
@@ -129,18 +162,15 @@ export default function App() {
     setPov(newPov);
     setView('dashboard');
 
-    // Sauvegarde : Supabase si connecté, localStorage sinon
     if (authUser) {
       await saveToSupabase(authUser.id, { userProfile: newProfile, actifs: userActifs, pov: newPov });
     } else {
       LS.set('nesso_user_profile', newProfile);
       LS.set('nesso_user_actifs', userActifs);
       LS.set('nesso_pov', newPov);
-      LS.set('nesso_view', 'dashboard');
     }
   };
 
-  // ── Mise à jour actifs → sauvegarde ──
   const handleSetActifs = async (newActifs) => {
     setActifs(newActifs);
     if (authUser) {
@@ -150,11 +180,8 @@ export default function App() {
     }
   };
 
-  // ── Reset / déconnexion ──
   const handleReset = async () => {
-    if (authUser) {
-      await supabase.from('user_data').delete().eq('id', authUser.id);
-    }
+    if (authUser) await supabase.from('user_data').delete().eq('id', authUser.id);
     LS.del('nesso_view', 'nesso_pov', 'nesso_user_profile', 'nesso_user_actifs', 'nesso_messages');
     setUserProfile(null);
     setActifs(ACTIFS);
@@ -166,7 +193,6 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
-  // ── Écran de chargement ──
   if (authLoading) {
     return (
       <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -175,17 +201,6 @@ export default function App() {
     );
   }
 
-  // ── Pas connecté → Auth ──
-  if (!authUser) {
-    return (
-      <>
-        <Auth />
-        <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
-      </>
-    );
-  }
-
-  // ── Onboarding (connecté mais pas encore de profil) ──
   if (view === 'onboarding') {
     return (
       <>
@@ -195,7 +210,6 @@ export default function App() {
     );
   }
 
-  // ── App principale ──
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0EA' }}>
       <Navbar
@@ -203,9 +217,15 @@ export default function App() {
         pov={pov} setPov={setPov}
         onApiKey={() => setShowApiKey(true)}
         onReset={handleReset}
-        onLogout={handleLogout}
-        userEmail={authUser.email}
+        onLogout={authUser ? handleLogout : null}
+        userEmail={authUser?.email}
       />
+
+      {/* Bannière sauvegarde si non connecté et audit terminé */}
+      {!authUser && userProfile && (
+        <SaveBanner onSave={() => setShowAuth(true)} />
+      )}
+
       <main>
         {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} />}
         {view === 'famille'         && <Famille      pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
@@ -213,6 +233,7 @@ export default function App() {
         {view === 'aide'            && <Aide         pov={pov} apiKey={apiKey} actifs={actifs} />}
         {view === 'confidentialite' && <Confidentialite />}
       </main>
+
       <footer style={{ textAlign: 'center', padding: '16px 24px 80px', borderTop: '1px solid rgba(27,43,75,0.08)' }}>
         <button onClick={() => setView('confidentialite')} style={{ background: 'none', border: 'none', color: '#7A7A8C', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textDecoration: 'underline' }}>
           Politique de confidentialité
@@ -220,6 +241,17 @@ export default function App() {
         <span style={{ color: '#D1C4B0', margin: '0 10px' }}>·</span>
         <span style={{ color: '#7A7A8C', fontSize: 12 }}>© 2026 Nesso — Estimations à titre indicatif</span>
       </footer>
+
+      {/* Modal Auth (sauvegarde post-audit) */}
+      {showAuth && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={e => { if (e.target === e.currentTarget) setShowAuth(false); }}>
+          <div style={{ width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', borderRadius: 16 }}>
+            <Auth embedded onClose={() => setShowAuth(false)} />
+          </div>
+        </div>
+      )}
+
       <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
     </div>
   );
