@@ -1,73 +1,66 @@
 import { useState, useRef, useEffect } from 'react';
 import { getDemoResponse } from '../utils.js';
 
-const SYSTEM_PROMPT = `Tu es le conseiller patrimonial de Nesso (France), bienveillant et précis, niveau family office.
+const SYSTEM_PROMPT = `Tu es le conseiller patrimonial Nesso. Style : chaleureux, ultra-concis. 2-3 phrases max par message. Texte brut uniquement — aucun markdown (pas de **, pas de #, pas de tirets listes). Ne donne JAMAIS de recommandations dans le chat : ton rôle est uniquement de collecter des informations.
 
-QUESTIONS dans l'ordre (1 seule à la fois, saute si déjà répondu) :
-1. Niveau : novice / intermédiaire / expert
-2. Prénom + prénoms conjoint et enfants
-3. Situation civile : marié·e / pacsé·e / concubin·e / célibataire — si marié·e : régime matrimonial ?
-4. Famille recomposée ? Enfants de plusieurs unions ? Demi-frères/sœurs dans la famille ?
-5. Testament ou donation déjà rédigés ? Déposés chez un notaire ?
-6. Immobilier : France et étranger — type, valeur, crédit, régime locatif, détenu en nom propre ou via SCI ?
-7. Financier : AV (montant, bénéficiaires à jour ?, versements avant/après 70 ans), PEA, PER, liquidités
-8. Retraite : régime(s), pension de réversion prévue pour le conjoint ?
-9. Situation pro : salarié / TNS / dirigeant / retraité — si société : valeur estimée ?
-10. Donations déjà faites ? Montant, date, formalisées ? (règle des 15 ans à vérifier)
-11. Objectifs — creuser : délai, blocage, leviers possibles
+QUESTIONS dans l'ordre (1 seule à la fois) :
+1. Niveau de connaissance : novice / intermédiaire / expert
+2. Âge, situation civile (marié/pacsé/concubin/célibataire), régime matrimonial si marié
+3. Prénom, prénom conjoint, prénoms et âges des enfants, parents encore en vie ?
+4. Famille recomposée ? Enfants de plusieurs unions ? Demi-frères/sœurs ?
+5. Testament ou donation existants ? (Si non : passer immédiatement, ne pas approfondir)
+6. Immobilier : chaque bien — type, valeur, crédit, location, France ou étranger, en nom propre ou SCI
+7. Financier : vos assurances-vie (montant, bénéficiaires à jour ?), PEA, PER, liquidités
+8. Retraite : régime(s), réversion prévue ?
+9. Situation pro : salarié / TNS / libéral / dirigeant / retraité — si société : valeur estimée ?
+10. Donations passées ? Montant et date ? (abattement rechargeable tous les 15 ans)
+11. Objectifs prioritaires + attendez-vous un héritage de vos parents ?
 
-SI l'utilisateur hésite ou ne sait pas : explique le risque concret en 1 phrase, repose la question simplement. N'accepte de passer qu'après une relance.
+RÈGLE : si l'utilisateur répond "non", "aucun", "pas de X" — passer à la question suivante sans relancer.
 
-ALERTES ⚠️ — STATUT CIVIL :
-- PACS sans testament → le partenaire n'hérite légalement de RIEN (0€, même après 20 ans de vie commune)
-- Concubinage → succession taxée à 60%, abattement 1 594€ seulement (vs 100 000€ parent-enfant)
-- Mariage sans contrat → communauté légale réduite aux acquêts par défaut, peut être défavorable
+ALERTES à signaler en 1 phrase simple si détecté :
+- PACS sans testament : le partenaire hérite de 0€ légalement
+- Concubinage : droits de succession à 60%
+- Famille recomposée + enfants non communs : conjoint limité à usufruit du quart (art.757)
+- Demi-frères/sœurs : règle de la fente successorale (art.733)
+- Bien étranger UE : Règlement européen 650/2012
+- Bien étranger hors UE : convention bilatérale spécifique à vérifier
+- Nationalité américaine : estate tax mondiale possible
+- Patrimoine immobilier net du foyer >1,3M€ : IFI potentiel
+- AV avec bénéficiaire non mis à jour après changement familial : risque
+- Donations informelles non enregistrées : rapportables à la succession
+- Profession libérale médicale : retraite CARMF, prévoyance spécifique
+- TNS/dirigeant : Pacte Dutreil (abattement 75% succession)
+- PER : capital hors succession si décès avant retraite
 
-ALERTES ⚠️ — FAMILLE :
-- Famille recomposée + enfants non communs → conjoint survivant limité à usufruit du quart seulement (art. 757 CC) — pas le choix classique
-- Demi-frères/sœurs sans descendant direct du défunt → règle de la fente (art. 733 CC) : ne reçoivent que dans leur branche
-- Communauté universelle + enfants → clause d'attribution intégrale à vérifier impérativement
-- Âge >67 ans → fenêtre AV bientôt moins avantageuse
+AVANT DE CONCLURE : demander "Y a-t-il d'autres éléments à ajouter ? Êtes-vous prêt à générer votre tableau de bord ?"
+CONCLUSION : quand l'utilisateur confirme, dire uniquement : "Je transmets vos données à notre moteur d'analyse. Votre tableau de bord personnalisé est prêt."
+SIGNAL DE FIN : ajouter exactement \`[AUDIT_COMPLET]\` à la toute fin du message de conclusion, une seule fois.`;
 
-ALERTES ⚠️ — INTERNATIONAL :
-- Bien étranger dans l'UE → Règlement 650/2012 applicable, certificat successoral européen possible
-- Bien étranger hors UE (USA, Maroc, Suisse, Liban…) → Règlement 650/2012 inapplicable, convention bilatérale spécifique à identifier
-- Immeuble étranger → suit souvent la loi du pays où il est situé (lex situs), même avec convention
-- Nationalité américaine → estate tax mondiale possible même résident en France, convention France-USA complexe
-- Double imposition toujours possible → vérifier convention bilatérale et résidence fiscale exacte
-
-ALERTES ⚠️ — PATRIMOINE & OPTIMISATION :
-- Patrimoine immobilier net >1,3M€ par foyer fiscal → IFI potentiel (abattement 30% sur résidence principale)
-- AV sans bénéficiaire désigné → perd son avantage hors succession
-- AV avec bénéficiaire non mis à jour après divorce, remariage ou décès → risque de transmission involontaire
-- Donations antérieures non formalisées (virement, aide à l'achat, paiement études) → requalifiables en donation rapportable
-- Règle des 15 ans : abattement 100 000€ parent-enfant rechargeable — dater précisément les donations passées
-- Indivision sans convention → tout indivisaire peut forcer la vente à tout moment (art. 815 CC)
-- Usufruit/nue-propriété non anticipé → blocage si nu-propriétaire veut vendre sans accord de l'usufruitier
-- Testament olographe non déposé au FCDDV → risque de perte ou contestation pour vice de forme
-- PER : décès avant retraite = capital hors succession comme AV avant 70 ans — souvent ignoré
-
-ALERTES ⚠️ — PROFESSIONNEL :
-- TNS / dirigeant avec société → Pacte Dutreil : abattement 75% sur droits de succession (à anticiper tôt)
-- Propriétaire bailleur meublé → statut LMNP souvent ignoré : amortissement du bien, revenus quasi non imposés
-- SCI familiale → vérifier comptabilité et assemblées générales à jour (SCI abandonnée = risque fiscal)
-
-APPROFONDISSEMENT :
-- Statut civil → PACS ou concubinage : testament rédigé ? AV avec bénéficiaire désigné ?
-- Bien étranger → UE ou hors UE ? Meuble ou immeuble ? Convention bilatérale identifiée ?
-- Famille recomposée → combien d'enfants communs vs non communs ? Donation entre époux existante ?
-- AV → clause bénéficiaire sur mesure ou standard ? Situation familiale changée depuis souscription ?
-- Pro/entrepreneur → valeur estimée de la société ? Successeur ? Pacte Dutreil envisageable ?
-- Donations → montant total, date précise, enregistrées aux impôts ? Acte notarié ou sous seing privé ?
-- Immobilier → nom propre ou SCI ? Démembrement usufruit/nue-propriété déjà en place ?
-- Testament → olographe ou authentique ? Déposé au FCDDV ? Dernière mise à jour ?
-- Objectifs → délai, situation bloquante, 2-3 leviers concrets
-
-CONCLUSION (après 10+ échanges) : résume la situation, puis dis exactement : "Je transmets ces données à notre moteur d'analyse — Nesso compile les règles successorales françaises et les stratégies de centaines de dossiers pour un plan niveau family office. Votre tableau de bord personnalisé est prêt."
-
-SIGNAL DE FIN : quand tu envoies ton message de conclusion finale, ajoute exactement \`[AUDIT_COMPLET]\` à la toute fin de ton message (invisible pour l'utilisateur, retiré automatiquement). N'utilise ce signal qu'une seule fois, uniquement pour le message de conclusion.
-
-Commence : présente-toi brièvement et demande le niveau de connaissance.`;
+const EXTRACTION_PROMPT = `Extrais les données de cette conversation patrimoniale en JSON strict. Réponds UNIQUEMENT avec le JSON, sans markdown.
+{
+  "prenom": "prénom utilisateur ou Utilisateur",
+  "conjoint": "prénom conjoint ou null",
+  "enfants_prenoms": [],
+  "enfants": 0,
+  "age": null,
+  "profession": null,
+  "regime": "communaute|separation|participation|universel ou null si non mentionné",
+  "situation_civile": "marie|pacse|concubin|celibataire ou null",
+  "parents_en_vie": null,
+  "famille_recomposee": false,
+  "actifs": [
+    {"nom": "description courte", "categorie": "immobilier|financier|professionnel|exotique", "valeur": 0, "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|Assurance-vie|PEA|PER|Liquidités|Société|Autre", "pays": "France"}
+  ],
+  "objectifs": "résumé en 1 phrase ou null",
+  "score": 60,
+  "alertes": []
+}
+Règles :
+- valeur = 0 si non précisée
+- score : 30 (peu de risques) à 90 (risques élevés) — évaluer objectivement
+- alertes : liste de mots-clés parmi : ifi, international, famille_recomposee, pacs_sans_testament, concubinage, av_sans_beneficiaire, donations_informelles, dutreil, lmnp, carmf, indivision, demembrement
+- inclure TOUS les actifs mentionnés avec leurs vraies valeurs`;
 
 const extractUserData = async (history) => {
   if (history.length < 3) return null;
@@ -76,31 +69,12 @@ const extractUserData = async (history) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 700,
-        system: 'Tu es un extracteur de données JSON. Réponds UNIQUEMENT avec le JSON demandé, sans markdown ni explication.',
+        model: 'claude-haiku-4-5',
+        max_tokens: 800,
+        system: 'Tu es un extracteur de données JSON. Réponds UNIQUEMENT avec le JSON demandé, sans markdown.',
         messages: [
-          ...history,
-          { role: 'user', content: `Extrais les informations patrimoniales mentionnées dans notre conversation en JSON strict :
-{
-  "prenom": "prénom de l'utilisateur si mentionné sinon Utilisateur",
-  "conjoint": "prénom du conjoint si mentionné sinon null",
-  "enfants_prenoms": ["prénom1", "prénom2"],
-  "age": null,
-  "profession": null,
-  "regime": null,
-  "enfants": 0,
-  "actifs": [
-    {"nom": "nom", "categorie": "immobilier|financier|professionnel|exotique", "valeur": 0, "type": "Résidence principale|Assurance-vie|Liquidités|Société|etc", "pays": "France"}
-  ],
-  "objectifs": "résumé en 1 phrase ou null",
-  "score": 60,
-  "alertes": []
-}
-- valeur = 0 si non mentionnée
-- score entre 30 (peu de risques) et 90 (risques élevés)
-- inclure UNIQUEMENT les actifs réellement mentionnés
-- enfants_prenoms = [] si aucun prénom d'enfant mentionné` }
+          ...history.slice(-20), // Limiter l'historique envoyé
+          { role: 'user', content: EXTRACTION_PROMPT }
         ]
       })
     });
@@ -111,6 +85,16 @@ const extractUserData = async (history) => {
     if (jsonMatch) return JSON.parse(jsonMatch[0]);
   } catch (e) { console.error('Extraction error:', e); }
   return null;
+};
+
+// Rendu markdown minimal : **gras** → <strong>
+const renderText = (text) => {
+  const parts = text.split(/(\*\*[^*\n]+\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith('**') && part.endsWith('**')
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  );
 };
 
 export default function Onboarding({ onComplete, apiKey, onApiKey }) {
@@ -130,7 +114,12 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     const res = await fetch('/anthropic/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }], messages: history.map(m => ({ role: m.role, content: m.content })) }),
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 350,
+        system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        messages: history.slice(-18).map(m => ({ role: m.role, content: m.content }))
+      }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -142,7 +131,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
 
   const getReply = async (history, count) => {
     if (isDemoMode) {
-      await new Promise(r => setTimeout(r, 700 + Math.random() * 400));
+      await new Promise(r => setTimeout(r, 500 + Math.random() * 300));
       return getDemoResponse(history[history.length - 1].content, count);
     }
     return callApi(history);
@@ -152,14 +141,14 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
 
   const complete = (updatedHistory) => {
     setTimeout(async () => {
-      if (isDemoMode) {
-        onComplete(null);
-        return;
-      }
+      if (isDemoMode) { onComplete(null); return; }
       const userData = await extractUserData(updatedHistory);
-      // Si extraction échoue, on passe quand même en mode user avec profil minimal
       onComplete(userData || PROFIL_VIDE);
-    }, 1800);
+    }, 1200);
+  };
+
+  const saveMessages = (msgs) => {
+    try { localStorage.setItem('nesso_messages', JSON.stringify(msgs)); } catch {}
   };
 
   const start = async () => {
@@ -168,10 +157,14 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     const init = [{ role: 'user', content: 'Bonjour, je voudrais faire le point sur mon patrimoine familial.' }];
     try {
       const reply = await getReply(init, 0);
-      setMessages([...init, { role: 'assistant', content: reply }]);
+      const msgs = [...init, { role: 'assistant', content: reply }];
+      setMessages(msgs);
+      saveMessages(msgs);
       setMsgCount(1);
     } catch {
-      setMessages([{ role: 'assistant', content: 'Bonjour ! Je suis votre conseiller Nesso.\n\nPour bien vous accompagner, comment évalueriez-vous votre niveau de connaissance en matière de patrimoine et de fiscalité ?\n\n— **Novice** : je connais peu le sujet\n— **Intermédiaire** : je comprends les bases\n— **Expert** : je maîtrise les mécanismes' }]);
+      const msgs = [{ role: 'assistant', content: 'Bonjour ! Je suis votre conseiller Nesso. Pour commencer, comment évalueriez-vous votre niveau de connaissance en patrimoine et fiscalité ? Novice, intermédiaire ou expert ?' }];
+      setMessages(msgs);
+      saveMessages(msgs);
     } finally { setLoading(false); }
   };
 
@@ -191,26 +184,18 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
       const reply = rawReply.replace('[AUDIT_COMPLET]', '').trim();
       const updatedHistory = [...history, { role: 'assistant', content: reply }];
       setMessages(updatedHistory);
-      localStorage.setItem('nesso_messages', JSON.stringify(updatedHistory));
-      if (auditTermine) {
-        complete(updatedHistory);
-      }
+      saveMessages(updatedHistory);
+      if (auditTermine) complete(updatedHistory);
     } catch (e) {
-      console.error('Nesso API error:', e);
-      setMessages(prev => [...prev, { role: 'assistant', content: `Erreur : ${e.message}. Réessayez ou passez directement à la démo.` }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `Une erreur est survenue. Réessayez ou passez à la démo.` }]);
     } finally { setLoading(false); }
-  };
-
-  const handleSkip = async () => {
-    await send('Je ne sais pas, je passerai cette question');
   };
 
   const handleMettreAJour = async () => {
     if (updating || loading) return;
     setUpdating(true);
-    if (isDemoMode) {
-      onComplete(null);
-    } else {
+    if (isDemoMode) { onComplete(null); }
+    else {
       const userData = await extractUserData(messages);
       onComplete(userData || PROFIL_VIDE);
     }
@@ -224,23 +209,37 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     setStarted(false);
   };
 
-  const handlePasserDashboard = () => {
-    onComplete(null);
+  const handlePasserDashboard = () => { onComplete(null); };
+
+  // Charger la conversation sauvegardée dans le chat
+  const handleContinuerConversation = () => {
+    const saved = getSavedMessages();
+    if (saved) {
+      setMessages(saved);
+      setMsgCount(saved.filter(m => m.role === 'user').length);
+      setStarted(true);
+    }
   };
 
-  const savedMessages = (() => { try { const m = localStorage.getItem('nesso_messages'); return m ? JSON.parse(m) : null; } catch { return null; } })();
-  const hasSavedConversation = savedMessages && savedMessages.length > 4;
-
+  // Générer le tableau depuis la conversation sauvegardée
   const handleReprendreConversation = async () => {
+    const saved = getSavedMessages();
+    if (!saved) return;
     setLoading(true);
-    const userData = await extractUserData(savedMessages);
+    const userData = await extractUserData(saved);
     onComplete(userData || PROFIL_VIDE);
     setLoading(false);
   };
 
+  const getSavedMessages = () => {
+    try { const m = localStorage.getItem('nesso_messages'); return m ? JSON.parse(m) : null; } catch { return null; }
+  };
+  const savedMessages = getSavedMessages();
+  const hasSavedConversation = savedMessages && savedMessages.length > 4;
+
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ maxWidth: 620, width: '100%' }}>
+      <div style={{ maxWidth: 660, width: '100%' }}>
 
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <h1 className="font-serif" style={{ color: '#C9A96E', fontSize: 42, fontWeight: 700, margin: '0 0 8px' }}>Nesso</h1>
@@ -252,22 +251,29 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
             <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', color: '#C9A96E', fontSize: 26 }}>✦</div>
             <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 26, margin: '0 0 12px' }}>Votre audit patrimonial</h2>
             <p style={{ color: '#6B7280', lineHeight: 1.75, marginBottom: 28, fontSize: 15 }}>
-              Répondez à quelques questions pour que nous construisions votre tableau de bord personnalisé. La conversation dure environ <strong>5 minutes</strong>.
+              Quelques questions pour construire votre tableau de bord personnalisé. <strong>5 minutes</strong> environ.
             </p>
 
             {isDemoMode && (
               <div style={{ background: '#F0F4FF', border: '1px solid #C7D7FD', borderRadius: 9, padding: 16, marginBottom: 24, textAlign: 'left' }}>
                 <p style={{ color: '#1D4ED8', fontSize: 13, fontWeight: 600, margin: '0 0 4px' }}>Mode démo activé</p>
-                <p style={{ color: '#3B5BDB', fontSize: 12, margin: '0 0 10px' }}>Le conseiller utilise des réponses simulées. Pour activer le vrai Claude :</p>
-                <button onClick={onApiKey} className="btn-navy" style={{ fontSize: 12, padding: '6px 14px' }}>Ajouter ma clé API Anthropic →</button>
+                <p style={{ color: '#3B5BDB', fontSize: 12, margin: '0 0 10px' }}>Réponses simulées. Pour activer le vrai Claude :</p>
+                <button onClick={onApiKey} className="btn-navy" style={{ fontSize: 12, padding: '6px 14px' }}>Ajouter ma clé API →</button>
               </div>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {hasSavedConversation && !isDemoMode && (
-                <button onClick={handleReprendreConversation} disabled={loading} style={{ width: '100%', padding: '14px', fontSize: 15, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
-                  {loading ? '⏳ Génération de votre tableau...' : '✦ Reprendre ma dernière conversation →'}
-                </button>
+                <>
+                  <button onClick={handleContinuerConversation} disabled={loading}
+                    style={{ width: '100%', padding: '14px', fontSize: 15, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
+                    ✦ Continuer ma conversation →
+                  </button>
+                  <button onClick={handleReprendreConversation} disabled={loading}
+                    style={{ width: '100%', padding: '11px', fontSize: 14, background: 'white', color: '#1B2B4B', border: '1px solid #E5E7EB', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                    {loading ? '⏳ Génération...' : '📊 Générer mon tableau depuis la dernière conversation'}
+                  </button>
+                </>
               )}
               <button className="btn-navy" onClick={start} style={{ width: '100%', padding: '14px', fontSize: 15 }}>
                 {isDemoMode ? 'Démarrer la démo →' : hasSavedConversation ? 'Recommencer un nouvel audit →' : 'Commencer l\'audit →'}
@@ -278,7 +284,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
             </div>
           </div>
         ) : (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 540 }}>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 640 }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid #F5F0EA', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>N</div>
@@ -300,8 +306,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
                   {m.role === 'assistant' && (
                     <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 2 }}>N</div>
                   )}
-                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#1A1A2E', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {m.content}
+                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#1A1A2E', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
+                    {renderText(m.content)}
                   </div>
                 </div>
               ))}
@@ -318,31 +324,31 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
 
             {messages.length > 1 && !loading && (
               <div style={{ paddingLeft: 14, paddingRight: 14, paddingTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                <button onClick={handleSkip} style={{ background: 'none', border: '1px solid #E5E7EB', color: '#7A7A8C', borderRadius: 20, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#C9A96E'; e.currentTarget.style.color = '#C9A96E'; }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.color = '#7A7A8C'; }}>
-                  Je ne sais pas / passer pour l'instant
+                <button onClick={() => send('Je ne sais pas, passons à la suite')}
+                  style={{ background: 'none', border: '1px solid #E5E7EB', color: '#7A7A8C', borderRadius: 20, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                  Passer cette question
                 </button>
               </div>
             )}
 
             <div style={{ borderTop: '1px solid #F5F0EA', padding: 14, display: 'flex', gap: 9 }}>
-              <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()}
+              <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
                 placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
               <button className="btn-navy" onClick={() => send()} disabled={loading || !input.trim()} style={{ padding: '10px 18px' }}>→</button>
             </div>
+
             {msgCount >= 6 && !updating && !loading && (
               <div style={{ padding: '0 14px 10px' }}>
                 <button onClick={handleMettreAJour} style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 600, background: '#1B2B4B', color: '#C9A96E', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                  ✦ Générer mon tableau de bord →
+                  {updating ? '⏳ Génération...' : '✦ Générer mon tableau de bord →'}
                 </button>
               </div>
             )}
-            <div style={{ textAlign: 'center', paddingBottom: 12, display: 'flex', justifyContent: 'center', gap: 16 }}>
-              <button onClick={handleMettreAJour} disabled={updating || loading} style={{ background: 'none', border: 'none', color: updating ? '#C9A96E' : '#7A7A8C', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
-                {updating ? '⏳ Génération...' : '📊 Mettre à jour'}
+
+            <div style={{ textAlign: 'center', paddingBottom: 12 }}>
+              <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
+                Nouvelle conversation
               </button>
-              <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>Nouvelle conversation</button>
             </div>
           </div>
         )}
