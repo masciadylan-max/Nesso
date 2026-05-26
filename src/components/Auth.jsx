@@ -1,5 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase.js';
+
+// Parse les tokens depuis le hash de l'URL (#access_token=...&refresh_token=...)
+const parseHashTokens = () => {
+  if (typeof window === 'undefined') return null;
+  const hash = window.location.hash.replace(/^#/, '');
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const access_token = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  if (access_token && refresh_token) return { access_token, refresh_token };
+  return null;
+};
+
+// Wrapper avec timeout pour éviter qu'une promesse Supabase hange à l'infini
+const withTimeout = (promise, ms, errorMsg = 'Délai dépassé') =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(errorMsg)), ms)),
+  ]);
 
 export default function Auth({ embedded = false, onClose, recoveryMode = false }) {
   // Si l'user arrive depuis le lien de reset email → mode 'newpassword'
@@ -11,6 +30,33 @@ export default function Auth({ embedded = false, onClose, recoveryMode = false }
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState('');
+  const [sessionReady, setSessionReady] = useState(!recoveryMode); // En mode normal: prêt direct. En recovery: attend setSession.
+
+  // En mode recovery : établir la session depuis les tokens de l'URL
+  // pour garantir que updateUser() ait bien un auth header valide.
+  useEffect(() => {
+    if (!recoveryMode) return;
+    const tokens = parseHashTokens();
+    if (!tokens) {
+      setError('Lien de réinitialisation invalide ou expiré. Demandez un nouveau lien.');
+      setSessionReady(true); // débloque l'UI même si erreur
+      return;
+    }
+    (async () => {
+      try {
+        await withTimeout(
+          supabase.auth.setSession(tokens),
+          8000,
+          'Session expirée. Demandez un nouveau lien de réinitialisation.'
+        );
+        setSessionReady(true);
+      } catch (e) {
+        console.error('setSession error:', e);
+        setError(e.message || 'Erreur lors de l\'établissement de la session.');
+        setSessionReady(true);
+      }
+    })();
+  }, [recoveryMode]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -43,7 +89,13 @@ export default function Auth({ embedded = false, onClose, recoveryMode = false }
 
       } else if (mode === 'newpassword') {
         if (password.length < 6) { setError('Le mot de passe doit faire au moins 6 caractères.'); setLoading(false); return; }
-        const { error } = await supabase.auth.updateUser({ password });
+        if (!sessionReady) { setError('Session pas encore prête, patientez 1 seconde puis réessayez.'); setLoading(false); return; }
+        // Timeout 10s sur updateUser pour ne pas hanger à l'infini
+        const { error } = await withTimeout(
+          supabase.auth.updateUser({ password }),
+          10000,
+          'Le serveur ne répond pas. Réessayez ou demandez un nouveau lien.'
+        );
         if (error) throw error;
         setSuccess('Mot de passe mis à jour ! Vous êtes maintenant connecté.');
         // Nettoyer l'URL (Supabase laisse le token dans le hash)
