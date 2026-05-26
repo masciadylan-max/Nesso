@@ -13,15 +13,17 @@ export default function Confidentialite() {
         },
         {
           titre: '2. Données collectées',
-          contenu: `Lors de l'utilisation de Nesso, vous pouvez partager volontairement des informations sur votre situation patrimoniale : prénom, situation familiale, valeur de vos actifs, objectifs financiers. Ces données sont saisies librement dans le cadre d'un audit conversationnel.
+          contenu: `Lors de l'utilisation de Nesso, vous partagez volontairement des informations sur votre situation patrimoniale : prénom, situation familiale, valeur estimée de vos actifs, objectifs financiers. Ces données sont saisies dans le cadre d'un audit conversationnel.
 
-Nesso ne collecte pas votre adresse e-mail, votre nom complet, votre adresse postale ou tout autre identifiant personnel, sauf si vous choisissez de les communiquer dans la conversation.`,
+Si vous créez un compte, Nesso collecte également votre adresse e-mail, utilisée uniquement pour l'authentification. Aucun nom complet, adresse postale ou numéro de téléphone n'est requis.`,
         },
         {
           titre: '3. Comment vos données sont stockées',
-          contenu: `Toutes les données que vous saisissez sont stockées uniquement dans votre navigateur, via le mécanisme localStorage. Elles ne sont jamais envoyées ni conservées sur nos serveurs.
+          contenu: `Si vous utilisez Nesso sans compte, vos données restent uniquement dans votre navigateur (localStorage) et disparaissent si vous videz votre cache.
 
-Si vous videz le cache de votre navigateur ou changez d'appareil, vos données sont effacées. Aucune base de données centralisée ne contient vos informations patrimoniales.`,
+Si vous créez un compte, vos données patrimoniales (profil et actifs) sont stockées dans une base de données sécurisée hébergée par Supabase (infrastructure AWS, région Europe — Irlande), chiffrées au repos (AES-256) et en transit (TLS). Chaque utilisateur ne peut accéder qu'à ses propres données.
+
+L'éditeur du service a accès aux données stockées dans la base de données à des fins de maintenance et de support technique. Ces données ne sont jamais revendues ni partagées avec des tiers commerciaux.`,
         },
         {
           titre: '4. Transmission à l\'API Anthropic',
@@ -37,16 +39,16 @@ Cette transmission transite par un proxy sécurisé hébergé sur Vercel (infras
           titre: '6. Vos droits (RGPD)',
           contenu: `Conformément au Règlement Général sur la Protection des Données (RGPD), vous disposez des droits suivants :
 
-— Droit d'accès : vous pouvez consulter vos données à tout moment dans votre navigateur (localStorage).
-— Droit d'effacement : vous pouvez supprimer toutes vos données en cliquant sur "Réinitialiser" dans l'application, ou en vidant le cache de votre navigateur.
+— Droit d'accès : vous pouvez consulter vos données depuis votre tableau de bord et l'onglet "Mes actifs".
+— Droit d'effacement : cliquez sur "Réinitialiser" dans l'application pour supprimer toutes vos données, y compris celles stockées en base de données. Vous pouvez aussi écrire à contact@nesso.fr pour demander la suppression de votre compte.
 — Droit de rectification : vous pouvez modifier vos actifs à tout moment depuis l'onglet "Mes actifs".
-— Droit à la portabilité : vos données sont lisibles directement dans les outils développeur de votre navigateur.
+— Droit à la portabilité : écrivez à contact@nesso.fr pour recevoir vos données au format JSON.
 
 Pour toute demande relative à vos droits : contact@nesso.fr`,
         },
         {
           titre: '7. Sécurité',
-          contenu: `Le site Nesso est servi exclusivement en HTTPS. La clé API Anthropic est stockée côté serveur (variable d'environnement Vercel) et n'est jamais exposée dans le code frontend. Aucune donnée patrimoniale n'est stockée sur nos serveurs.`,
+          contenu: `Le site Nesso est servi exclusivement en HTTPS. La clé API Anthropic est stockée côté serveur et n'est jamais exposée côté navigateur. Les données en base de données sont chiffrées au repos et en transit. L'accès à chaque compte est protégé par authentification email et mot de passe hashé (bcrypt).`,
         },
         {
           titre: '8. Modifications',
@@ -64,7 +66,8 @@ Pour toute demande relative à vos droits : contact@nesso.fr`,
       <div style={{ background: '#F5F0EA', borderRadius: 12, padding: 20, marginTop: 16 }}>
         <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0, lineHeight: 1.7 }}>
           <strong style={{ color: '#1B2B4B' }}>Contact :</strong> contact@nesso.fr<br />
-          <strong style={{ color: '#1B2B4B' }}>Hébergeur :</strong> Vercel Inc., 340 Pine Street, Suite 900, San Francisco, CA 94104, USA<br />
+          <strong style={{ color: '#1B2B4B' }}>Hébergeur frontend :</strong> Vercel Inc., 340 Pine Street, Suite 900, San Francisco, CA 94104, USA<br />
+          <strong style={{ color: '#1B2B4B' }}>Hébergeur base de données :</strong> Supabase Inc. / AWS eu-west-1 (Irlande)<br />
           <strong style={{ color: '#1B2B4B' }}>IA :</strong> Anthropic, PBC — anthropic.com/privacy
         </p>
       </div>

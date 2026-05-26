@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabase.js';
 
 export default function Auth() {
-  const [mode, setMode]       = useState('login'); // 'login' | 'register' | 'reset'
-  const [email, setEmail]     = useState('');
+  const [mode, setMode]         = useState('login'); // 'login' | 'register' | 'reset'
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [prenom, setPrenom]   = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  const [success, setSuccess] = useState('');
+  const [prenom, setPrenom]     = useState('');
+  const [consent, setConsent]   = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [success, setSuccess]   = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -23,6 +24,7 @@ export default function Auth() {
 
       } else if (mode === 'register') {
         if (!prenom.trim()) { setError('Veuillez entrer votre prénom.'); setLoading(false); return; }
+        if (!consent) { setError('Veuillez accepter la politique de confidentialité pour continuer.'); setLoading(false); return; }
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -101,13 +103,30 @@ export default function Auth() {
           </div>
 
           {mode !== 'reset' && (
-            <div style={{ marginBottom: 20 }}>
+            <div style={{ marginBottom: mode === 'register' ? 14 : 20 }}>
               <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Mot de passe</label>
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder={mode === 'register' ? 'Minimum 6 caractères' : '••••••••'} required autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
               />
+            </div>
+          )}
+
+          {mode === 'register' && (
+            <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <input
+                type="checkbox" id="consent" checked={consent} onChange={e => setConsent(e.target.checked)}
+                style={{ marginTop: 2, flexShrink: 0, accentColor: '#1B2B4B', width: 16, height: 16, cursor: 'pointer' }}
+              />
+              <label htmlFor="consent" style={{ color: '#6B7280', fontSize: 13, lineHeight: 1.5, cursor: 'pointer' }}>
+                J'ai lu et j'accepte la{' '}
+                <a href="#confidentialite" onClick={e => { e.preventDefault(); window.open('/confidentialite', '_blank'); }}
+                  style={{ color: '#C9A96E', fontWeight: 600, textDecoration: 'underline' }}>
+                  politique de confidentialité
+                </a>
+                , notamment le stockage de mes données patrimoniales et leur traitement par l'IA Claude (Anthropic).
+              </label>
             </div>
           )}
 
