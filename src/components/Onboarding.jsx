@@ -3,98 +3,169 @@ import { getDemoResponse } from '../utils.js';
 
 const SYSTEM_PROMPT = `Tu es le conseiller patrimonial Nesso. Style : chaleureux, ultra-concis. 2-3 phrases max par message. Texte brut uniquement — aucun markdown (pas de **, pas de #, pas de tirets listes). Ne donne JAMAIS de recommandations dans le chat : ton rôle est uniquement de collecter des informations.
 
-QUESTIONS dans l'ordre (1 seule à la fois) :
-1. Niveau de connaissance patrimoniale : novice / intermédiaire / expert
-2. Vous : prénom, âge, profession, situation civile (marié/pacsé/concubin/célibataire), régime matrimonial si marié
-3. Conjoint (si applicable) : prénom, âge, profession
-4. Enfants : prénoms et âges (et précise s'ils sont d'une union précédente)
-5. Parents encore en vie ? Si oui âges approximatifs
-6. Famille recomposée ? Demi-frères/sœurs ?
-7. Testament ou donation existants ? (Si non : passer immédiatement, ne pas approfondir)
-8. Immobilier APPARTENANT au foyer (vous + conjoint uniquement) : chaque bien — type, valeur, crédit, location, France ou étranger, en nom propre ou SCI. NE PAS demander les biens des parents/beaux-parents/fratrie.
-9. Financier DU FOYER : vos assurances-vie (montant, bénéficiaires à jour ?), PEA, PER, liquidités
-10. Retraite : régime(s), réversion prévue ? — si société : valeur estimée ?
-11. Donations passées ? Montant et date ? (abattement rechargeable tous les 15 ans)
-12. Objectifs prioritaires + attendez-vous un héritage de vos parents/beaux-parents ? (information à titre indicatif uniquement, NE PAS comptabiliser comme votre patrimoine actuel)
+L'audit suit 4 PHASES dans l'ordre. Respecte strictement la phase en cours.
 
-RÈGLE CRITIQUE PATRIMOINE : "votre patrimoine" = exclusivement les biens dont vous et/ou votre conjoint êtes propriétaires aujourd'hui. Les biens des parents, beaux-parents, fratrie, amis → JAMAIS dans votre patrimoine, même si vous en hériterez un jour.
+═══ PHASE 1 — CADRAGE (toujours, Q1 à Q5) ═══
+Q1. Niveau de connaissance patrimoniale : novice / intermédiaire / expert
+Q2. Vous : prénom, âge, profession, situation civile (marié/pacsé/concubin/célibataire), régime matrimonial si marié
+Q3. Conjoint(e) si applicable : prénom, âge, profession
+Q4. Enfants : prénoms et âges (préciser si d'une union précédente)
+Q5. Vos parents sont-ils encore en vie ?
 
-RÈGLE : si l'utilisateur répond "non", "aucun", "pas de X" — passer à la question suivante sans relancer.
+═══ PHASE 2 — CHOIX DU FOCUS (1 message) ═══
+Après Q5, propose EXACTEMENT ce choix :
+"Sur quoi voulez-vous concentrer la suite de l'audit ?
 
-ALERTES à signaler en 1 phrase simple si détecté :
-- PACS sans testament : le partenaire hérite de 0€ légalement
-- Concubinage : droits de succession à 60%
-- Famille recomposée + enfants non communs : conjoint limité à usufruit du quart (art.757)
-- Demi-frères/sœurs : règle de la fente successorale (art.733)
-- Bien étranger UE : Règlement européen 650/2012
-- Bien étranger hors UE : convention bilatérale spécifique à vérifier
-- Nationalité américaine : estate tax mondiale possible
-- Patrimoine immobilier net du foyer >1,3M€ : IFI potentiel
-- AV avec bénéficiaire non mis à jour après changement familial : risque
-- Donations informelles non enregistrées : rapportables à la succession
-- Profession libérale médicale : retraite CARMF, prévoyance spécifique
-- TNS/dirigeant : Pacte Dutreil (abattement 75% succession)
-- PER : capital hors succession si décès avant retraite
+A. Succession & transmission (≈ 5 min) — anticiper la transmission, sécuriser les proches, optimiser les droits.
+B. Optimisation fiscale (≈ 5 min) — réduire vos impôts annuels, maximiser vos revenus.
+C. Les deux (≈ 10 min) — couvrir l'ensemble.
 
-AVANT DE CONCLURE : demander "Y a-t-il d'autres éléments à ajouter ? Êtes-vous prêt à générer votre tableau de bord ?"
-CONCLUSION : quand l'utilisateur confirme, dire EXACTEMENT : "Parfait, je transmets vos données à notre moteur d'analyse. Votre tableau de bord personnalisé sera prêt dans quelques secondes. ⚠ Important : pour conserver votre audit, pensez à créer un compte gratuit depuis le tableau de bord — sinon vos données seront perdues si vous quittez la page."
-SIGNAL DE FIN : ajouter exactement \`[AUDIT_COMPLET]\` à la toute fin du message de conclusion, une seule fois.`;
+Tapez A, B ou C."
 
-const EXTRACTION_PROMPT = `Extrais les données patrimoniales de cette conversation en JSON strict. Réponds UNIQUEMENT avec le JSON, sans markdown.
+Si la réponse est ambiguë, redemande de clarifier (1 phrase).
 
-PRINCIPE FONDAMENTAL : ne JAMAIS renvoyer null/0/vide pour les champs critiques. Si une info est manquante, ESTIME le plus probable d'après le contexte (âge, profession, ville, situation familiale). Un tableau de bord vide est un échec — toujours fournir des valeurs plausibles.
+═══ PHASE 3A — SUCCESSION (si A ou C) ═══
+Annonce d'ouverture : "Très bien, creusons votre succession."
+S1. Vos grands-parents : lesquels sont encore en vie (paternels / maternels) ? Patrimoine estimé pour ceux en vie ?
+S2. Autres parties prenantes à intégrer : demi-frères/sœurs, parts dans une SCI familiale, enfant adopté, parrainage, etc. ?
+S3. Pour [prénom conjoint si applicable] : souhaitez-vous intégrer dès maintenant sa famille (parents, grands-parents) et détailler son patrimoine pour son futur profil, ou on garde ça pour plus tard ?
+S4. Biens immobiliers DU FOYER (vous + conjoint uniquement) : pour chaque bien — type, valeur, crédit restant, location, France/étranger, nom propre ou SCI.
+S5. Assurances-vie DU FOYER : nombre de contrats, montants, bénéficiaires à jour ?
+S6. Donations passées (reçues de vos parents OU faites à vos enfants) : montant et date.
+S7. Testament déjà rédigé ?
 
-RÈGLE CRITIQUE — PÉRIMÈTRE DU PATRIMOINE : Le champ "actifs" doit contenir EXCLUSIVEMENT les biens appartenant au foyer fiscal (user + conjoint). NE JAMAIS inclure les biens des parents, beaux-parents, fratrie, amis, enfants majeurs autonomes, même si l'utilisateur les mentionne. Un héritage attendu n'est PAS un actif actuel.
+═══ PHASE 3B — OPTIMISATION (si B ou C, après 3A si C) ═══
+Annonce d'ouverture : "Passons à l'optimisation fiscale."
+O1. Revenus annuels du foyer (avant impôt) : salaires, dividendes, loyers, BIC/BNC.
+O2. Tranche marginale d'imposition connue ? Sinon, on l'estime ensemble.
+O3. Charges déductibles significatives : frais réels, pension alimentaire versée, dons, garde d'enfants à domicile, services à la personne.
+O4. Dispositifs fiscaux déjà en place : PER, Pinel/Denormandie, FCPI/FIP, Madelin, article 83 ?
+O5. Si dirigeant ou TNS : régime de rémunération (salaire vs dividendes), holding patrimoniale en place ? Pacte Dutreil envisagé ?
+O6. Quotient familial : enfants à charge, situations particulières (handicap, garde alternée, étudiant majeur rattaché).
+O7. Profession libérale médicale ? → noter CARMF et prévoyance Madelin spécifiques.
 
-Exemples :
-- "Mes beaux-parents ont un appartement à Paris à 800 000€" → NE PAS l'ajouter aux actifs
-- "Mon père a une maison de 500k qui me reviendra" → NE PAS l'ajouter (mais peut alimenter "objectifs" sous forme d'héritage anticipé)
-- "Nous avons acheté une RP avec mon mari, 600 000€" → AJOUTER aux actifs (c'est bien le patrimoine du foyer)
+═══ PHASE 4 — CLÔTURE ═══
+Demander : "Y a-t-il d'autres éléments à ajouter ? Êtes-vous prêt à générer votre tableau de bord ?"
+
+Quand l'user confirme, dire EXACTEMENT : "Parfait, je transmets vos données à notre moteur d'analyse. Votre tableau de bord personnalisé sera prêt dans quelques secondes. ⚠ Important : pour conserver votre audit, créez un compte gratuit depuis le tableau de bord — sinon vos données seront perdues si vous quittez la page."
+
+Ajouter \`[AUDIT_COMPLET]\` à la toute fin du message de conclusion, une seule fois.
+
+═══ RÈGLES TRANSVERSALES ═══
+- "Non / aucun / pas de X" → passer à la question suivante sans relancer.
+- PÉRIMÈTRE PATRIMOINE : "votre patrimoine" = biens du foyer (vous + conjoint) uniquement. JAMAIS ceux des parents/beaux-parents/fratrie/amis dans 'actifs', même mentionnés. Exception : Phase 3A S1/S3 où on note séparément le patrimoine des grands-parents et belle-famille (sans les confondre avec le patrimoine du foyer).
+- Bien étranger UE → mentionner règlement UE 650/2012 ; hors UE → convention bilatérale.
+- PER → capital hors succession si décès avant retraite.
+- Si l'utilisateur volontiers une info en avance (ex. mentionne son immobilier dès Q2), la retenir et ne pas redemander plus tard.`;
+
+const EXTRACTION_PROMPT = `Extrais les données patrimoniales en JSON strict. Réponds UNIQUEMENT le JSON, sans markdown, sans texte avant/après.
+
+PRINCIPE : ne JAMAIS renvoyer null/0/vide pour les champs critiques. Si une info manque, ESTIME le plus probable. Un tableau de bord vide est un échec.
+
+PÉRIMÈTRE PATRIMOINE : 'actifs' = biens DU FOYER uniquement (user + conjoint). JAMAIS les biens des parents/beaux-parents/fratrie/amis, même mentionnés. Un héritage attendu n'est PAS un actif actuel. Si l'user mentionne le patrimoine de ses grands-parents ou de la belle-famille (Phase 3A), le mettre dans 'succession.grands_parents' ou 'succession.belle_famille_patrimoine_estime', pas dans 'actifs'.
 
 {
-  "prenom": "prénom utilisateur (sinon 'Vous')",
-  "conjoint": "prénom conjoint ou null si célibataire",
-  "enfants_prenoms": ["prénoms des enfants — si l'user dit 'j'ai 2 enfants' sans prénom, utiliser 'Enfant 1', 'Enfant 2'"],
+  "prenom": "prénom user ou 'Vous'",
+  "conjoint": "prénom conjoint ou null",
+  "enfants_prenoms": [],
   "enfants": 0,
-  "age": 40,
-  "profession": "ESTIMER si non dit (ex: 'cadre' par défaut pour un patrimoine important)",
-  "regime": "communaute|separation|participation|universel — si marié sans précision : 'communaute' (défaut légal France)",
-  "situation_civile": "marie|pacse|concubin|celibataire — déduire du contexte si non explicite",
+  "age": 45,
+  "profession": "Cadre",
+  "regime": "communaute|separation|participation|universel — défaut 'communaute' si marié",
+  "situation_civile": "marie|pacse|concubin|celibataire",
   "parents_en_vie": true,
   "famille_recomposee": false,
+
+  "focus_audit": "succession|optimisation|les_deux — d'après le choix A/B/C fait en Phase 2",
+
+  "succession": {
+    "grands_parents_vivants": false,
+    "grands_parents_patrimoine_estime": 0,
+    "autres_parties_prenantes": [],
+    "belle_famille_incluse": false,
+    "belle_famille_patrimoine_estime": 0,
+    "donations_passees": [{"de": "parent|user", "vers": "user|enfant", "montant": 0, "annee": 2020}],
+    "testament_existant": false
+  },
+
+  "optimisation": {
+    "revenus_annuels_foyer": 0,
+    "tmi": "0|11|30|41|45",
+    "charges_deductibles": [],
+    "dispositifs_en_place": [],
+    "regime_renumeration_dirigeant": "salaire|dividendes|mixte|na",
+    "quotient_familial_situations": []
+  },
+
   "actifs": [
     {"nom": "description courte", "categorie": "immobilier|financier|professionnel|exotique", "valeur": 250000, "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|Assurance-vie|PEA|PER|Liquidités|Société|Autre", "pays": "France"}
   ],
-  "objectifs": "résumé en 1 phrase (par défaut : 'Optimiser la transmission patrimoniale et réduire la fiscalité')",
+
+  "objectifs": "résumé en 1 phrase",
   "score": 60,
   "alertes": []
 }
 
-RÈGLES D'ESTIMATION (utilise-les sans hésiter quand l'info manque) :
-- Valeur d'un bien immobilier non précisée : estimer selon contexte (Paris ~10k€/m², province ~3k€/m², appart standard 80m², maison 130m²). Par défaut Résidence principale = 350 000€, Résidence secondaire = 250 000€, Bien locatif = 200 000€.
-- Assurance-vie sans montant : estimer 50 000€ (médiane française pour épargnant moyen 40 ans)
-- PEA sans montant : 30 000€ ; PER : 20 000€ ; Liquidités : 15 000€
-- Société/parts pro sans valeur : 200 000€ (PME médiane)
-- Si l'user dit "j'ai un peu d'épargne" sans préciser : créer un actif "Liquidités" à 20 000€
-- Si l'user mentionne un bien sans préciser le type : choisir "Résidence principale" par défaut
-- Âge non donné : 45 ans (cible patrimoniale moyenne)
-- Profession non donnée mais patrimoine >500k€ : "Cadre" ; sinon "Salarié"
+ESTIMATIONS PAR DÉFAUT (si non précisé) :
+- RP : 350 000€ ; Résidence secondaire : 250 000€ ; Bien locatif : 200 000€
+- AV : 50 000€ ; PEA : 30 000€ ; PER : 20 000€ ; Liquidités : 15 000€ ; Société : 200 000€
+- Âge : 45. Profession : 'Cadre' si patrimoine > 500k€, sinon 'Salarié'.
+- Au moins 2 actifs dans 'actifs' (sinon dashboard vide)
+- enfants_prenoms : "Enfant 1", "Enfant 2"... si nombre connu mais prénoms manquants
 
-LOGIQUE DE TRANCHAGE :
-- Toujours inclure AU MOINS 2 actifs dans le tableau (sinon dashboard vide). Si l'user n'a vraiment rien dit : ajouter une résidence principale estimée + liquidités estimées.
-- enfants_prenoms ne doit JAMAIS être vide si enfants > 0 — générer "Enfant 1", "Enfant 2" si pas de prénom
-- Score : 30 (peu de risques) à 90 (risques élevés). Par défaut 60.
-- Alertes : tirer parmi { ifi, international, famille_recomposee, pacs_sans_testament, concubinage, av_sans_beneficiaire, donations_informelles, dutreil, lmnp, carmf, indivision, demembrement }
-  → Si PACS détecté ET aucun testament mentionné : OBLIGATOIRE ajouter "pacs_sans_testament"
-  → Si concubin détecté : OBLIGATOIRE ajouter "concubinage"
-  → Si bien à l'étranger : OBLIGATOIRE ajouter "international"
-  → Si patrimoine immobilier net (RP × 0.7 + autres) > 1 300 000€ : OBLIGATOIRE ajouter "ifi"
-  → Si profession libérale médicale (médecin, dentiste, kiné...) : ajouter "carmf"
-  → Si TNS/dirigeant avec société : ajouter "dutreil"
+ALERTES OBLIGATOIRES si triggers détectés (mots-clés parmi { ifi, international, famille_recomposee, pacs_sans_testament, concubinage, av_sans_beneficiaire, donations_informelles, dutreil, lmnp, carmf, indivision, demembrement }) :
+- PACS + pas de testament → "pacs_sans_testament"
+- Concubinage → "concubinage"
+- Bien à l'étranger → "international"
+- Patrimoine immobilier net (RP×0.7 + autres) > 1 300 000€ → "ifi"
+- Libéral médical → "carmf"
+- Dirigeant/TNS → "dutreil"
+- Famille recomposée → "famille_recomposee"
 
 Mieux vaut une estimation imparfaite qu'un champ vide. Tranche toujours.`;
 
 // Bug #3 : parsing JSON robuste — gère markdown ```json, texte autour, JSON tronqué
+// Tracker de coût pour un audit (réinitialisé à chaque nouveau démarrage)
+// Tarifs Haiku 4.5 (USD / 1M tokens) — à ajuster si les prix Anthropic changent
+const PRICE = { input: 1.0, cacheRead: 0.10, cacheWrite: 1.25, output: 5.0 };
+let auditCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0, calls: 0 };
+
+const resetAuditCost = () => { auditCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0, calls: 0 }; };
+
+const trackCost = (usage, label) => {
+  if (!usage) return;
+  const cacheRead  = usage.cache_read_input_tokens || 0;
+  const cacheWrite = usage.cache_creation_input_tokens || 0;
+  const inputNew   = Math.max(0, (usage.input_tokens || 0) - cacheRead - cacheWrite);
+  const output     = usage.output_tokens || 0;
+  const cost =
+    inputNew   * PRICE.input      / 1_000_000 +
+    cacheWrite * PRICE.cacheWrite / 1_000_000 +
+    cacheRead  * PRICE.cacheRead  / 1_000_000 +
+    output     * PRICE.output     / 1_000_000;
+  auditCost.input      += inputNew;
+  auditCost.cacheRead  += cacheRead;
+  auditCost.cacheWrite += cacheWrite;
+  auditCost.output     += output;
+  auditCost.usd        += cost;
+  auditCost.calls      += 1;
+  console.log(`[Nesso] ${label} #${auditCost.calls} — input:${inputNew} cache:${cacheRead}r/${cacheWrite}w output:${output} → $${cost.toFixed(5)}`);
+};
+
+const logAuditTotal = () => {
+  const centimesEur = auditCost.usd * 0.92 * 100;
+  console.log(
+    `%c[Nesso] 📊 AUDIT TERMINÉ\n` +
+    `  Appels API : ${auditCost.calls}\n` +
+    `  Input neuf : ${auditCost.input} tokens\n` +
+    `  Cache hit : ${auditCost.cacheRead} tokens (économisés)\n` +
+    `  Cache write : ${auditCost.cacheWrite} tokens\n` +
+    `  Output : ${auditCost.output} tokens\n` +
+    `  Coût : $${auditCost.usd.toFixed(4)} ≈ ${centimesEur.toFixed(2)} centimes €`,
+    'color:#C9A96E;font-weight:bold;'
+  );
+};
+
 const parseJsonRobust = (text) => {
   if (!text) return null;
   // Strip code fences ```json ... ``` ou ``` ... ```
@@ -139,6 +210,7 @@ const extractUserData = async (history) => {
     clearTimeout(timeout);
     if (!res.ok) return null;
     const data = await res.json();
+    trackCost(data.usage, 'extraction');
     const text = data.content?.[0]?.text || '';
     return parseJsonRobust(text);
   } catch (e) {
@@ -188,6 +260,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
       throw new Error(err.error?.message || `Erreur ${res.status}`);
     }
     const data = await res.json();
+    trackCost(data.usage, 'chat');
     return data.content[0].text;
   };
 
@@ -203,6 +276,9 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
   const PROFIL_VIDE = {
     prenom: 'Vous', conjoint: null, enfants_prenoms: [], age: 45, profession: 'Cadre',
     regime: 'communaute', situation_civile: 'celibataire', parents_en_vie: true, famille_recomposee: false,
+    focus_audit: 'les_deux',
+    succession: { grands_parents_vivants: false, grands_parents_patrimoine_estime: 0, autres_parties_prenantes: [], belle_famille_incluse: false, belle_famille_patrimoine_estime: 0, donations_passees: [], testament_existant: false },
+    optimisation: { revenus_annuels_foyer: 0, tmi: null, charges_deductibles: [], dispositifs_en_place: [], regime_renumeration_dirigeant: 'na', quotient_familial_situations: [] },
     actifs: [
       { nom: 'Résidence principale (estimée)', categorie: 'immobilier', valeur: 350000, type: 'Résidence principale', pays: 'France' },
       { nom: 'Épargne (estimée)', categorie: 'financier', valeur: 30000, type: 'Liquidités', pays: 'France' },
@@ -224,6 +300,30 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     if (!out.score) out.score = 60;
     if (!Array.isArray(out.alertes)) out.alertes = [];
     if (!Array.isArray(out.enfants_prenoms)) out.enfants_prenoms = [];
+
+    // Nouvelle archi phasée : focus_audit + objets succession/optimisation
+    if (!['succession', 'optimisation', 'les_deux'].includes(out.focus_audit)) {
+      out.focus_audit = 'les_deux';
+    }
+    out.succession = {
+      grands_parents_vivants: false,
+      grands_parents_patrimoine_estime: 0,
+      autres_parties_prenantes: [],
+      belle_famille_incluse: false,
+      belle_famille_patrimoine_estime: 0,
+      donations_passees: [],
+      testament_existant: false,
+      ...(out.succession || {}),
+    };
+    out.optimisation = {
+      revenus_annuels_foyer: 0,
+      tmi: null,
+      charges_deductibles: [],
+      dispositifs_en_place: [],
+      regime_renumeration_dirigeant: 'na',
+      quotient_familial_situations: [],
+      ...(out.optimisation || {}),
+    };
     // Si nombre d'enfants > 0 mais pas de prénoms, en générer
     if (out.enfants > 0 && out.enfants_prenoms.length === 0) {
       out.enfants_prenoms = Array.from({ length: out.enfants }, (_, i) => `Enfant ${i + 1}`);
@@ -270,6 +370,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     setTimeout(async () => {
       if (isDemoMode) { onComplete(null); return; }
       const userData = await extractUserData(updatedHistory);
+      logAuditTotal();
       onComplete(sanitizeUserData(userData));
     }, 1200);
   };
@@ -279,6 +380,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
   };
 
   const start = async () => {
+    resetAuditCost();
     setStarted(true);
     setLoading(true);
     const init = [{ role: 'user', content: 'Bonjour, je voudrais faire le point sur mon patrimoine familial.' }];
@@ -326,6 +428,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     if (isDemoMode) { onComplete(null); }
     else {
       const userData = await extractUserData(messages);
+      logAuditTotal();
       onComplete(sanitizeUserData(userData));
     }
     setUpdating(false);
@@ -356,6 +459,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     if (!saved) return;
     setLoading(true);
     const userData = await extractUserData(saved);
+    logAuditTotal();
     onComplete(sanitizeUserData(userData));
     setLoading(false);
   };

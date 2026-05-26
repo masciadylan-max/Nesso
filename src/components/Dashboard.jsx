@@ -78,7 +78,14 @@ const generateUserActions = (userProfile, patrimoine) => {
 };
 
 export default function Dashboard({ pov, actifs, userProfile }) {
-  const [tab, setTab] = useState('succession');
+  // Ouvre le bon onglet selon le focus choisi par l'user en Phase 2 de l'audit
+  const initialTab = userProfile?.focus_audit === 'optimisation' ? 'optimisation' : 'succession';
+  const [tab, setTab] = useState(initialTab);
+  // Re-synchroniser si l'user fait un nouvel audit (focus_audit peut changer)
+  useEffect(() => {
+    if (userProfile?.focus_audit === 'optimisation') setTab('optimisation');
+    else if (userProfile?.focus_audit === 'succession') setTab('succession');
+  }, [userProfile?.focus_audit]);
   const [selectedAction, setSelectedAction] = useState(null);
   const [showNessoPlus, setShowNessoPlus] = useState(false);
   const [loading, setLoading] = useState(true);
