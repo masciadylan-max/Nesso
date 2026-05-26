@@ -340,20 +340,21 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
   const hasSavedConversation = savedMessages && savedMessages.length > 4;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ maxWidth: 660, width: '100%' }}>
+    <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: started ? 'center' : 'flex-start', padding: started ? 24 : '60px 24px' }}>
+      <div style={{ maxWidth: 720, width: '100%' }}>
 
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <h1 className="font-serif" style={{ color: '#C9A96E', fontSize: 42, fontWeight: 700, margin: '0 0 8px' }}>Nesso</h1>
-          <p style={{ color: '#1B2B4B', fontSize: 17, margin: 0 }}>Clarté patrimoniale familiale</p>
+          <p style={{ color: '#1B2B4B', fontSize: 17, margin: 0, lineHeight: 1.5 }}>La solution IA pour gérer le patrimoine et la succession de ta famille</p>
         </div>
 
         {!started ? (
+          <>
           <div className="card" style={{ padding: 40, textAlign: 'center' }}>
             <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', color: '#C9A96E', fontSize: 26 }}>✦</div>
             <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 26, margin: '0 0 12px' }}>Votre audit patrimonial</h2>
             <p style={{ color: '#6B7280', lineHeight: 1.75, marginBottom: 28, fontSize: 15 }}>
-              Quelques questions pour construire votre tableau de bord personnalisé. <strong>5 minutes</strong> environ.
+              Quelques questions pour construire votre tableau de bord personnalisé. <strong>5 à 15 minutes</strong> selon votre situation.
             </p>
 
             {isDemoMode && (
@@ -397,6 +398,49 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
               </div>
             )}
           </div>
+
+          {/* Manifeste / Qui sommes-nous */}
+          <div style={{ marginTop: 56, padding: '0 8px' }}>
+            <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', textAlign: 'center', margin: '0 0 18px' }}>Notre manifeste</p>
+            <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 26, fontWeight: 700, textAlign: 'center', margin: '0 0 28px', lineHeight: 1.3 }}>
+              La clarté patrimoniale n'est plus réservée aux familles aisées.
+            </h2>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginBottom: 32 }}>
+              <div style={{ background: 'white', borderRadius: 12, padding: 22, border: '1px solid rgba(27,43,75,0.06)' }}>
+                <p style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: '0 0 6px', fontFamily: 'Cormorant Garamond, serif' }}>×3</p>
+                <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 500, margin: '0 0 4px' }}>Recettes de l'État</p>
+                <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+                  Les droits de succession perçus par l'État ont plus que triplé ces 15 dernières années.
+                </p>
+              </div>
+              <div style={{ background: 'white', borderRadius: 12, padding: 22, border: '1px solid rgba(27,43,75,0.06)' }}>
+                <p style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: '0 0 6px', fontFamily: 'Cormorant Garamond, serif' }}>0%</p>
+                <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 500, margin: '0 0 4px' }}>Évolution des abattements</p>
+                <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+                  L'immobilier a explosé, mais les tranches d'abattement n'ont pas bougé. La fiscalité réelle augmente silencieusement.
+                </p>
+              </div>
+              <div style={{ background: 'white', borderRadius: 12, padding: 22, border: '1px solid rgba(27,43,75,0.06)' }}>
+                <p style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: '0 0 6px', fontFamily: 'Cormorant Garamond, serif' }}>1%</p>
+                <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 500, margin: '0 0 4px' }}>Familles équipées</p>
+                <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.6, margin: 0 }}>
+                  Seules les familles qui pouvaient s'offrir notaires, fiscalistes et family offices optimisaient leur succession.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ background: 'linear-gradient(135deg, #1B2B4B 0%, #243656 100%)', borderRadius: 14, padding: '32px 28px', color: 'white' }}>
+              <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.18em', textTransform: 'uppercase', margin: '0 0 12px' }}>Notre mission</p>
+              <p style={{ fontSize: 16, lineHeight: 1.75, margin: '0 0 14px', color: 'rgba(255,255,255,0.92)' }}>
+                Aujourd'hui, l'IA permet à chacun de prendre en main son patrimoine et d'anticiper sa succession <strong style={{ color: '#C9A96E' }}>à un coût quasi nul</strong>.
+              </p>
+              <p style={{ fontSize: 15, lineHeight: 1.75, margin: 0, color: 'rgba(255,255,255,0.75)' }}>
+                C'est la mission de Nesso : apporter cette connaissance et cette clarté à tous les foyers, et casser l'inégalité d'accès au conseil patrimonial.
+              </p>
+            </div>
+          </div>
+          </>
         ) : (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 640 }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid #F5F0EA', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
