@@ -8,6 +8,7 @@ import Actifs from './components/Actifs.jsx';
 import Aide from './components/Aide.jsx';
 import Onboarding from './components/Onboarding.jsx';
 import Auth from './components/Auth.jsx';
+import Compte from './components/Compte.jsx';
 import Confidentialite from './components/Confidentialite.jsx';
 import { Modal } from './components/Shared.jsx';
 
@@ -94,6 +95,13 @@ export default function App() {
              (window.location.hostname !== 'localhost' ? 'proxy' : '');
     } catch { return 'proxy'; }
   });
+
+  // Si l'user est sur la vue 'compte' mais se déconnecte, rediriger vers onboarding
+  useEffect(() => {
+    if (view === 'compte' && !authUser) {
+      setView(userProfile ? 'dashboard' : 'onboarding');
+    }
+  }, [view, authUser, userProfile]);
 
   useEffect(() => {
     // Filet de sécurité : si Supabase ne fire jamais INITIAL_SESSION,
@@ -256,6 +264,22 @@ export default function App() {
   if (view === 'onboarding') {
     return (
       <>
+        {/* Badge "Connecté" en haut à droite si l'user est authentifié */}
+        {authUser && (
+          <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50, display: 'flex', alignItems: 'center', gap: 8, background: '#1B2B4B', color: 'white', padding: '6px 10px 6px 6px', borderRadius: 24, boxShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
+            <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#C9A96E', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {authUser.email[0].toUpperCase()}
+            </span>
+            <span style={{ fontSize: 12, opacity: 0.85, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Connecté : {authUser.email}
+            </span>
+            <button onClick={handleLogout} title="Se déconnecter"
+              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: '2px 8px', cursor: 'pointer', fontSize: 11, fontFamily: 'DM Sans, sans-serif' }}>
+              ↪
+            </button>
+          </div>
+        )}
+
         <Onboarding
           onComplete={handleComplete}
           apiKey={apiKey}
@@ -309,6 +333,9 @@ export default function App() {
         {view === 'famille'         && <Famille      pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
         {view === 'actifs'          && <Actifs       pov={pov} actifs={actifs} setActifs={handleSetActifs} />}
         {view === 'aide'            && <Aide         pov={pov} apiKey={apiKey} actifs={actifs} />}
+        {view === 'compte' && authUser && (
+          <Compte authUser={authUser} userProfile={userProfile} onLogout={handleLogout} onView={setView} />
+        )}
         {view === 'confidentialite' && <Confidentialite />}
       </main>
 

@@ -1,6 +1,6 @@
 import { FAMILLE } from '../data.js';
 
-const NAV_ITEMS = [
+const NAV_ITEMS_BASE = [
   { id: 'dashboard', label: 'Tableau de bord', icon: '◈' },
   { id: 'famille',   label: 'Ma famille',      icon: '◉' },
   { id: 'actifs',    label: 'Mes actifs',      icon: '◎' },
@@ -8,6 +8,10 @@ const NAV_ITEMS = [
 ];
 
 export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, onLogout, userEmail }) {
+  // 'Mon compte' uniquement si connecté
+  const NAV_ITEMS = userEmail
+    ? [...NAV_ITEMS_BASE, { id: 'compte', label: 'Mon compte', icon: '◐' }]
+    : NAV_ITEMS_BASE;
   return (
     <>
       {/* Desktop */}
@@ -38,10 +42,13 @@ export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, 
             </select>
 <button onClick={onApiKey} title="Configurer la clé API" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>⚙</button>
             {userEmail && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid rgba(255,255,255,0.1)', paddingLeft: 10 }}>
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</span>
-                <button onClick={onLogout} title="Se déconnecter" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>↪</button>
-              </div>
+              <button onClick={() => setView('compte')} title="Mon compte"
+                style={{ display: 'flex', alignItems: 'center', gap: 7, background: view === 'compte' ? 'rgba(201,169,110,0.18)' : 'rgba(255,255,255,0.07)', border: '1px solid rgba(201,169,110,0.25)', color: '#C9A96E', borderRadius: 20, padding: '5px 12px 5px 5px', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#C9A96E', color: 'white', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {userEmail[0].toUpperCase()}
+                </span>
+                <span style={{ fontSize: 12, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</span>
+              </button>
             )}
           </div>
         </div>
