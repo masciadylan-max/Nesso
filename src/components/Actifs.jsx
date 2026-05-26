@@ -5,7 +5,18 @@ import { Modal } from './Shared.jsx';
 const CAT_ICONS  = { immobilier: '🏠', financier: '💰', professionnel: '🏢', exotique: '💎' };
 const CAT_COLORS = { immobilier: '#1B2B4B', financier: '#C9A96E', professionnel: '#6B7280', exotique: '#9333EA' };
 
-export default function Actifs({ pov, actifs, setActifs }) {
+// Résout le prénom affiché pour un POV (user, conjoint, enfant_N, ou statique demo)
+const resolvePovLabel = (pov, userProfile) => {
+  if (pov === 'user') return userProfile?.prenom || 'Vous';
+  if (pov === 'conjoint') return userProfile?.conjoint || 'Conjoint(e)';
+  if (pov?.startsWith?.('enfant_')) {
+    const i = parseInt(pov.split('_')[1], 10);
+    return userProfile?.enfants_prenoms?.[i] || 'Enfant';
+  }
+  return getPersonne(pov)?.prenom || pov;
+};
+
+export default function Actifs({ pov, actifs, setActifs, userProfile }) {
   const [filter, setFilter]   = useState('tous');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm]       = useState({ nom: '', categorie: 'immobilier', valeur: '', type: 'Résidence principale', pays: 'France', note: '' });
@@ -129,7 +140,7 @@ export default function Actifs({ pov, actifs, setActifs }) {
               </select>
             </div>
           ))}
-          <p style={{ color: '#7A7A8C', fontSize: 12, margin: 0 }}>Attribué à {getPersonne(pov)?.prenom} (point de vue actuel)</p>
+          <p style={{ color: '#7A7A8C', fontSize: 12, margin: 0 }}>Attribué à {resolvePovLabel(pov, userProfile)} (point de vue actuel)</p>
           <button className="btn-navy" onClick={addActif}>Ajouter l'actif</button>
         </div>
       </Modal>

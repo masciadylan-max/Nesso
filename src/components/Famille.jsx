@@ -10,7 +10,10 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
   const gen = [0, 1, 2].map(g => FAMILLE.filter(p => p.generation === g));
 
   // Vue personnalisée quand l'utilisateur a fait l'onboarding
-  if (pov === 'user' && userProfile) {
+  // (s'applique aussi quand on regarde depuis le POV d'un membre de la famille
+  // de l'user, car la même arbre est pertinent)
+  const isFamilyContext = userProfile && (pov === 'user' || pov === 'conjoint' || pov.startsWith?.('enfant_'));
+  if (isFamilyContext) {
     const userActifs = getActifsByOwner('user', actifs);
     const userPatrimoine = getPatrimoine('user', actifs);
     const hasFamily = userProfile.conjoint || (userProfile.enfants_prenoms?.length > 0);

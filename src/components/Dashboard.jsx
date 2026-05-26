@@ -84,9 +84,58 @@ export default function Dashboard({ pov, actifs, userProfile }) {
   const [loading, setLoading] = useState(true);
 
   const isUserPov = pov === 'user' && userProfile;
+  // Détecte les POV "famille de l'user" extraits de l'audit (conjoint, enfant_0, enfant_1...)
+  // On a peu d'infos sur eux : on affichera une vue limitée + CTA Nesso+ / espace dédié.
+  const isFamilyMemberPov = userProfile && (pov === 'conjoint' || pov.startsWith?.('enfant_'));
+
+  // Vue limitée pour conjoint / enfants (peu de données disponibles)
+  if (isFamilyMemberPov) {
+    const memberName = pov === 'conjoint'
+      ? (userProfile.conjoint || 'Conjoint(e)')
+      : (userProfile.enfants_prenoms?.[parseInt(pov.split('_')[1], 10)] || 'Enfant');
+    const memberRole = pov === 'conjoint' ? 'Conjoint(e)' : 'Enfant';
+
+    return (
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '36px 24px 100px' }} className="fade-in">
+        <div style={{ marginBottom: 32 }}>
+          <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Tableau de bord — Vue limitée</p>
+          <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, fontWeight: 700, margin: 0 }}>
+            {memberName} <span style={{ color: '#C9A96E' }}>✦</span>
+          </h1>
+          <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>{memberRole} · Profil non détaillé</p>
+        </div>
+
+        <div className="card" style={{ padding: 36, textAlign: 'center', background: 'linear-gradient(135deg, #FFFDF9 0%, #FFF8EE 100%)', border: '1px solid #FDE8C8' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#1B2B4B', color: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 18px' }}>🔒</div>
+          <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 12px' }}>Profil non détaillé</h2>
+          <p style={{ color: '#6B7280', fontSize: 14, lineHeight: 1.7, maxWidth: 520, margin: '0 auto 24px' }}>
+            Vous avez mentionné <strong>{memberName}</strong> lors de votre audit, mais nous n'avons pas encore les informations nécessaires pour générer un tableau personnalisé à son point de vue (revenus, actifs propres, objectifs, donations reçues...).
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14, maxWidth: 560, margin: '0 auto 24px' }}>
+            <div style={{ background: 'white', borderRadius: 10, padding: 18, border: '1px solid #FDE8C8' }}>
+              <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 8px' }}>✦ Nesso+</p>
+              <p style={{ color: '#1B2B4B', fontSize: 13, fontWeight: 600, margin: '0 0 4px' }}>Détailler depuis votre compte</p>
+              <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.55, margin: 0 }}>Étendez l'audit aux profils de votre famille (sous votre supervision).</p>
+            </div>
+            <div style={{ background: 'white', borderRadius: 10, padding: 18, border: '1px solid #E5E7EB' }}>
+              <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 8px' }}>◐ Espace dédié</p>
+              <p style={{ color: '#1B2B4B', fontSize: 13, fontWeight: 600, margin: '0 0 4px' }}>Inviter {memberName} sur Nesso</p>
+              <p style={{ color: '#7A7A8C', fontSize: 12, lineHeight: 1.55, margin: 0 }}>{memberName} crée son propre compte et fait son propre audit.</p>
+            </div>
+          </div>
+
+          <p style={{ color: '#A8A8B8', fontSize: 12, fontStyle: 'italic', margin: 0 }}>
+            Ces deux options seront disponibles dans une prochaine version.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const person = isUserPov
     ? { prenom: userProfile.prenom || 'Vous', age: userProfile.age, role: 'Utilisateur', profession: userProfile.profession }
-    : getPersonne(pov);
+    : (getPersonne(pov) || { prenom: 'Inconnu', age: null, role: '—', profession: null });
   const patrimoine = getPatrimoine(pov, actifs);
   const calculs = isUserPov ? computeUserCalculs(patrimoine, userProfile) : (CALCULS[pov] || CALCULS.lucas);
   const actions = isUserPov ? generateUserActions(userProfile, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
