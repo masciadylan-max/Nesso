@@ -291,6 +291,7 @@ export default function App() {
         onReset={handleReset}
         onLogout={authUser ? handleLogout : null}
         userEmail={authUser?.email}
+        userProfile={userProfile}
       />
 
 

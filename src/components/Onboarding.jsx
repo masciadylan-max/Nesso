@@ -11,11 +11,13 @@ QUESTIONS dans l'ordre (1 seule à la fois) :
 5. Parents encore en vie ? Si oui âges approximatifs
 6. Famille recomposée ? Demi-frères/sœurs ?
 7. Testament ou donation existants ? (Si non : passer immédiatement, ne pas approfondir)
-8. Immobilier : chaque bien — type, valeur, crédit, location, France ou étranger, en nom propre ou SCI
-9. Financier : vos assurances-vie (montant, bénéficiaires à jour ?), PEA, PER, liquidités
+8. Immobilier APPARTENANT au foyer (vous + conjoint uniquement) : chaque bien — type, valeur, crédit, location, France ou étranger, en nom propre ou SCI. NE PAS demander les biens des parents/beaux-parents/fratrie.
+9. Financier DU FOYER : vos assurances-vie (montant, bénéficiaires à jour ?), PEA, PER, liquidités
 10. Retraite : régime(s), réversion prévue ? — si société : valeur estimée ?
 11. Donations passées ? Montant et date ? (abattement rechargeable tous les 15 ans)
-12. Objectifs prioritaires + attendez-vous un héritage de vos parents ?
+12. Objectifs prioritaires + attendez-vous un héritage de vos parents/beaux-parents ? (information à titre indicatif uniquement, NE PAS comptabiliser comme votre patrimoine actuel)
+
+RÈGLE CRITIQUE PATRIMOINE : "votre patrimoine" = exclusivement les biens dont vous et/ou votre conjoint êtes propriétaires aujourd'hui. Les biens des parents, beaux-parents, fratrie, amis → JAMAIS dans votre patrimoine, même si vous en hériterez un jour.
 
 RÈGLE : si l'utilisateur répond "non", "aucun", "pas de X" — passer à la question suivante sans relancer.
 
@@ -41,6 +43,13 @@ SIGNAL DE FIN : ajouter exactement \`[AUDIT_COMPLET]\` à la toute fin du messag
 const EXTRACTION_PROMPT = `Extrais les données patrimoniales de cette conversation en JSON strict. Réponds UNIQUEMENT avec le JSON, sans markdown.
 
 PRINCIPE FONDAMENTAL : ne JAMAIS renvoyer null/0/vide pour les champs critiques. Si une info est manquante, ESTIME le plus probable d'après le contexte (âge, profession, ville, situation familiale). Un tableau de bord vide est un échec — toujours fournir des valeurs plausibles.
+
+RÈGLE CRITIQUE — PÉRIMÈTRE DU PATRIMOINE : Le champ "actifs" doit contenir EXCLUSIVEMENT les biens appartenant au foyer fiscal (user + conjoint). NE JAMAIS inclure les biens des parents, beaux-parents, fratrie, amis, enfants majeurs autonomes, même si l'utilisateur les mentionne. Un héritage attendu n'est PAS un actif actuel.
+
+Exemples :
+- "Mes beaux-parents ont un appartement à Paris à 800 000€" → NE PAS l'ajouter aux actifs
+- "Mon père a une maison de 500k qui me reviendra" → NE PAS l'ajouter (mais peut alimenter "objectifs" sous forme d'héritage anticipé)
+- "Nous avons acheté une RP avec mon mari, 600 000€" → AJOUTER aux actifs (c'est bien le patrimoine du foyer)
 
 {
   "prenom": "prénom utilisateur (sinon 'Vous')",
@@ -223,6 +232,13 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     if (!Array.isArray(out.actifs) || out.actifs.length === 0) {
       out.actifs = PROFIL_VIDE.actifs;
     } else {
+      // Filet de sécurité : exclure les actifs qui semblent appartenir à des tiers
+      // (mots-clés dans le nom évoquant parents/beaux-parents/fratrie)
+      const TIERS_REGEX = /\b(parent|beau|belle|père|mère|m[èe]re|p[èa]re|fr[èe]re|s(œ|oe)ur|grand[\s-]?(parent|p[èe]re|m[èe]re)|oncle|tante|cousin|cousine|ami|amie)s?\b/i;
+      out.actifs = out.actifs.filter(a => !TIERS_REGEX.test(a.nom || ''));
+      // Si on a tout filtré → revenir aux defaults pour ne pas afficher un dashboard vide
+      if (out.actifs.length === 0) out.actifs = PROFIL_VIDE.actifs;
+
       // Forcer valeurs >0 sur les actifs (estimations par défaut si manquantes)
       const defauts = {
         'Résidence principale': 350000, 'Résidence secondaire': 250000, 'Bien locatif': 200000,

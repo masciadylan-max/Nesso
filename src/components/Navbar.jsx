@@ -7,11 +7,25 @@ const NAV_ITEMS_BASE = [
   { id: 'aide',      label: 'Aide',            icon: '◇' },
 ];
 
-export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, onLogout, userEmail }) {
+// Construit la liste des "points de vue" disponibles dans le selecteur :
+// - Si l'user a fait l'audit → sa vraie famille (Vous + conjoint + enfants)
+// - Sinon → famille démo (Lucas, Pierre, etc.)
+const buildPovOptions = (userProfile) => {
+  if (!userProfile) return FAMILLE.map(p => ({ id: p.id, prenom: p.prenom }));
+  const list = [{ id: 'user', prenom: userProfile.prenom || 'Vous' }];
+  if (userProfile.conjoint) list.push({ id: 'conjoint', prenom: userProfile.conjoint });
+  (userProfile.enfants_prenoms || []).forEach((prenom, i) =>
+    list.push({ id: `enfant_${i}`, prenom })
+  );
+  return list;
+};
+
+export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, onLogout, userEmail, userProfile }) {
   // 'Mon compte' uniquement si connecté
   const NAV_ITEMS = userEmail
     ? [...NAV_ITEMS_BASE, { id: 'compte', label: 'Mon compte', icon: '◐' }]
     : NAV_ITEMS_BASE;
+  const povOptions = buildPovOptions(userProfile);
   return (
     <>
       {/* Desktop */}
@@ -38,7 +52,7 @@ export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12 }}>Point de vue</span>
             <select value={pov} onChange={e => setPov(e.target.value)} style={{ background: 'rgba(255,255,255,0.08)', color: 'white', border: '1px solid rgba(201,169,110,0.35)', borderRadius: 8, padding: '6px 12px', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-              {FAMILLE.map(p => <option key={p.id} value={p.id} style={{ background: '#1B2B4B' }}>{p.prenom}</option>)}
+              {povOptions.map(p => <option key={p.id} value={p.id} style={{ background: '#1B2B4B' }}>{p.prenom}</option>)}
             </select>
 <button onClick={onApiKey} title="Configurer la clé API" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>⚙</button>
             {userEmail && (
