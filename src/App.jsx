@@ -79,15 +79,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Bug #7 fix : guard pour empêcher double-call concurrent de loadUserData
-    let sessionHandled = false;
-
+    // Charge la session existante au démarrage (gère le cas "pas connecté")
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (sessionHandled) return; // si onAuthStateChange a déjà traité, on skip
-      sessionHandled = true;
       setAuthUser(session?.user ?? null);
-      if (session?.user) loadUserData(session.user.id);
-      else {
+      if (session?.user) {
+        loadUserData(session.user.id);
+      } else {
         // Pas connecté → charger depuis localStorage si dispo
         const savedProfile = LS.get('nesso_user_profile', null);
         const savedActifs  = LS.get('nesso_user_actifs', null);
@@ -99,48 +96,54 @@ export default function App() {
         }
         setAuthLoading(false);
       }
+    }).catch(err => {
+      console.error('getSession error:', err);
+      setAuthLoading(false);
     });
 
+    // Écoute les changements ultérieurs (login, logout, refresh token)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Bug #7 : ignorer l'event INITIAL_SESSION si getSession l'a déjà traité
-      if (event === 'INITIAL_SESSION' && sessionHandled) return;
-      sessionHandled = true;
+      // Ignorer l'event INITIAL_SESSION : déjà traité par getSession ci-dessus
+      if (event === 'INITIAL_SESSION') return;
 
       setAuthUser(session?.user ?? null);
-      if (session?.user) {
+      if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
         setShowAuth(false);
-        // Vérifie si données existantes dans Supabase
-        const { data, error: fetchErr } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
-        if (data) {
-          // Compte existant → charger ses données
-          setUserProfile(data.profile_json);
-          setActifs(data.actifs_json || ACTIFS);
-          setPov(data.pov || 'user');
-          setView('dashboard');
-        } else {
-          // Nouveau compte → migrer depuis localStorage avec gestion d'erreur (bug #6)
-          const savedProfile = LS.get('nesso_user_profile', null);
-          const savedActifs  = LS.get('nesso_user_actifs', null);
-          if (savedProfile) {
-            try {
-              const { error: upsertErr } = await supabase.from('user_data').upsert({
-                id: session.user.id,
-                profile_json: savedProfile,
-                actifs_json: savedActifs || ACTIFS,
-                pov: 'user',
-                updated_at: new Date().toISOString(),
-              });
-              if (upsertErr) throw upsertErr;
-              setMigrationError(null);
-            } catch (e) {
-              console.error('Migration localStorage → Supabase échouée :', e);
-              setMigrationError('Vos données n\'ont pas pu être sauvegardées sur nos serveurs (problème réseau). Elles restent disponibles localement. Réessayez de vous reconnecter dans quelques minutes.');
-            }
-            setUserProfile(savedProfile);
-            setActifs(savedActifs || ACTIFS);
-            setPov('user');
+        try {
+          const { data } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
+          if (data) {
+            // Compte existant → charger ses données
+            setUserProfile(data.profile_json);
+            setActifs(data.actifs_json || ACTIFS);
+            setPov(data.pov || 'user');
             setView('dashboard');
+          } else {
+            // Nouveau compte → migrer depuis localStorage avec gestion d'erreur (bug #6)
+            const savedProfile = LS.get('nesso_user_profile', null);
+            const savedActifs  = LS.get('nesso_user_actifs', null);
+            if (savedProfile) {
+              try {
+                const { error: upsertErr } = await supabase.from('user_data').upsert({
+                  id: session.user.id,
+                  profile_json: savedProfile,
+                  actifs_json: savedActifs || ACTIFS,
+                  pov: 'user',
+                  updated_at: new Date().toISOString(),
+                });
+                if (upsertErr) throw upsertErr;
+                setMigrationError(null);
+              } catch (e) {
+                console.error('Migration localStorage → Supabase échouée :', e);
+                setMigrationError('Vos données n\'ont pas pu être sauvegardées sur nos serveurs. Elles restent disponibles localement. Réessayez de vous reconnecter dans quelques minutes.');
+              }
+              setUserProfile(savedProfile);
+              setActifs(savedActifs || ACTIFS);
+              setPov('user');
+              setView('dashboard');
+            }
           }
+        } catch (e) {
+          console.error('Auth state change error:', e);
         }
         setAuthLoading(false);
       } else if (event === 'SIGNED_OUT') {
