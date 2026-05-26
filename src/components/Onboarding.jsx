@@ -35,33 +35,55 @@ ALERTES à signaler en 1 phrase simple si détecté :
 - PER : capital hors succession si décès avant retraite
 
 AVANT DE CONCLURE : demander "Y a-t-il d'autres éléments à ajouter ? Êtes-vous prêt à générer votre tableau de bord ?"
-CONCLUSION : quand l'utilisateur confirme, dire uniquement : "Je transmets vos données à notre moteur d'analyse. Votre tableau de bord personnalisé est prêt."
+CONCLUSION : quand l'utilisateur confirme, dire EXACTEMENT : "Parfait, je transmets vos données à notre moteur d'analyse. Votre tableau de bord personnalisé sera prêt dans quelques secondes. ⚠ Important : pour conserver votre audit, pensez à créer un compte gratuit depuis le tableau de bord — sinon vos données seront perdues si vous quittez la page."
 SIGNAL DE FIN : ajouter exactement \`[AUDIT_COMPLET]\` à la toute fin du message de conclusion, une seule fois.`;
 
-const EXTRACTION_PROMPT = `Extrais les données de cette conversation patrimoniale en JSON strict. Réponds UNIQUEMENT avec le JSON, sans markdown.
+const EXTRACTION_PROMPT = `Extrais les données patrimoniales de cette conversation en JSON strict. Réponds UNIQUEMENT avec le JSON, sans markdown.
+
+PRINCIPE FONDAMENTAL : ne JAMAIS renvoyer null/0/vide pour les champs critiques. Si une info est manquante, ESTIME le plus probable d'après le contexte (âge, profession, ville, situation familiale). Un tableau de bord vide est un échec — toujours fournir des valeurs plausibles.
+
 {
-  "prenom": "prénom utilisateur ou Utilisateur",
-  "conjoint": "prénom conjoint ou null",
-  "enfants_prenoms": [],
+  "prenom": "prénom utilisateur (sinon 'Vous')",
+  "conjoint": "prénom conjoint ou null si célibataire",
+  "enfants_prenoms": ["prénoms des enfants — si l'user dit 'j'ai 2 enfants' sans prénom, utiliser 'Enfant 1', 'Enfant 2'"],
   "enfants": 0,
-  "age": null,
-  "profession": null,
-  "regime": "communaute|separation|participation|universel ou null si non mentionné",
-  "situation_civile": "marie|pacse|concubin|celibataire ou null",
-  "parents_en_vie": null,
+  "age": 40,
+  "profession": "ESTIMER si non dit (ex: 'cadre' par défaut pour un patrimoine important)",
+  "regime": "communaute|separation|participation|universel — si marié sans précision : 'communaute' (défaut légal France)",
+  "situation_civile": "marie|pacse|concubin|celibataire — déduire du contexte si non explicite",
+  "parents_en_vie": true,
   "famille_recomposee": false,
   "actifs": [
-    {"nom": "description courte", "categorie": "immobilier|financier|professionnel|exotique", "valeur": 0, "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|Assurance-vie|PEA|PER|Liquidités|Société|Autre", "pays": "France"}
+    {"nom": "description courte", "categorie": "immobilier|financier|professionnel|exotique", "valeur": 250000, "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|Assurance-vie|PEA|PER|Liquidités|Société|Autre", "pays": "France"}
   ],
-  "objectifs": "résumé en 1 phrase ou null",
+  "objectifs": "résumé en 1 phrase (par défaut : 'Optimiser la transmission patrimoniale et réduire la fiscalité')",
   "score": 60,
   "alertes": []
 }
-Règles :
-- valeur = 0 si non précisée
-- score : 30 (peu de risques) à 90 (risques élevés) — évaluer objectivement
-- alertes : liste de mots-clés parmi : ifi, international, famille_recomposee, pacs_sans_testament, concubinage, av_sans_beneficiaire, donations_informelles, dutreil, lmnp, carmf, indivision, demembrement
-- inclure TOUS les actifs mentionnés avec leurs vraies valeurs`;
+
+RÈGLES D'ESTIMATION (utilise-les sans hésiter quand l'info manque) :
+- Valeur d'un bien immobilier non précisée : estimer selon contexte (Paris ~10k€/m², province ~3k€/m², appart standard 80m², maison 130m²). Par défaut Résidence principale = 350 000€, Résidence secondaire = 250 000€, Bien locatif = 200 000€.
+- Assurance-vie sans montant : estimer 50 000€ (médiane française pour épargnant moyen 40 ans)
+- PEA sans montant : 30 000€ ; PER : 20 000€ ; Liquidités : 15 000€
+- Société/parts pro sans valeur : 200 000€ (PME médiane)
+- Si l'user dit "j'ai un peu d'épargne" sans préciser : créer un actif "Liquidités" à 20 000€
+- Si l'user mentionne un bien sans préciser le type : choisir "Résidence principale" par défaut
+- Âge non donné : 45 ans (cible patrimoniale moyenne)
+- Profession non donnée mais patrimoine >500k€ : "Cadre" ; sinon "Salarié"
+
+LOGIQUE DE TRANCHAGE :
+- Toujours inclure AU MOINS 2 actifs dans le tableau (sinon dashboard vide). Si l'user n'a vraiment rien dit : ajouter une résidence principale estimée + liquidités estimées.
+- enfants_prenoms ne doit JAMAIS être vide si enfants > 0 — générer "Enfant 1", "Enfant 2" si pas de prénom
+- Score : 30 (peu de risques) à 90 (risques élevés). Par défaut 60.
+- Alertes : tirer parmi { ifi, international, famille_recomposee, pacs_sans_testament, concubinage, av_sans_beneficiaire, donations_informelles, dutreil, lmnp, carmf, indivision, demembrement }
+  → Si PACS détecté ET aucun testament mentionné : OBLIGATOIRE ajouter "pacs_sans_testament"
+  → Si concubin détecté : OBLIGATOIRE ajouter "concubinage"
+  → Si bien à l'étranger : OBLIGATOIRE ajouter "international"
+  → Si patrimoine immobilier net (RP × 0.7 + autres) > 1 300 000€ : OBLIGATOIRE ajouter "ifi"
+  → Si profession libérale médicale (médecin, dentiste, kiné...) : ajouter "carmf"
+  → Si TNS/dirigeant avec société : ajouter "dutreil"
+
+Mieux vaut une estimation imparfaite qu'un champ vide. Tranche toujours.`;
 
 const extractUserData = async (history) => {
   if (history.length < 3) return null;
@@ -138,13 +160,60 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     return callApi(history);
   };
 
-  const PROFIL_VIDE = { prenom: 'Vous', conjoint: null, enfants_prenoms: [], actifs: [], alertes: [], score: 60, objectifs: null };
+  // Profil de secours : valeurs plausibles pour ne JAMAIS afficher un tableau vide
+  const PROFIL_VIDE = {
+    prenom: 'Vous', conjoint: null, enfants_prenoms: [], age: 45, profession: 'Cadre',
+    regime: 'communaute', situation_civile: 'celibataire', parents_en_vie: true, famille_recomposee: false,
+    actifs: [
+      { nom: 'Résidence principale (estimée)', categorie: 'immobilier', valeur: 350000, type: 'Résidence principale', pays: 'France' },
+      { nom: 'Épargne (estimée)', categorie: 'financier', valeur: 30000, type: 'Liquidités', pays: 'France' },
+    ],
+    alertes: [], score: 60,
+    objectifs: 'Optimiser la transmission patrimoniale et réduire la fiscalité',
+  };
+
+  // Garantit qu'aucun champ critique n'est vide/nul après extraction
+  const sanitizeUserData = (data) => {
+    if (!data) return PROFIL_VIDE;
+    const out = { ...data };
+    if (!out.prenom || out.prenom === 'Utilisateur') out.prenom = 'Vous';
+    if (!out.age) out.age = 45;
+    if (!out.profession) out.profession = 'Cadre';
+    if (!out.regime && out.situation_civile === 'marie') out.regime = 'communaute';
+    if (out.parents_en_vie == null) out.parents_en_vie = true;
+    if (!out.objectifs) out.objectifs = 'Optimiser la transmission patrimoniale et réduire la fiscalité';
+    if (!out.score) out.score = 60;
+    if (!Array.isArray(out.alertes)) out.alertes = [];
+    if (!Array.isArray(out.enfants_prenoms)) out.enfants_prenoms = [];
+    // Si nombre d'enfants > 0 mais pas de prénoms, en générer
+    if (out.enfants > 0 && out.enfants_prenoms.length === 0) {
+      out.enfants_prenoms = Array.from({ length: out.enfants }, (_, i) => `Enfant ${i + 1}`);
+    }
+    // Au moins 2 actifs pour éviter un dashboard vide
+    if (!Array.isArray(out.actifs) || out.actifs.length === 0) {
+      out.actifs = PROFIL_VIDE.actifs;
+    } else {
+      // Forcer valeurs >0 sur les actifs (estimations par défaut si manquantes)
+      const defauts = {
+        'Résidence principale': 350000, 'Résidence secondaire': 250000, 'Bien locatif': 200000,
+        'Assurance-vie': 50000, 'PEA': 30000, 'PER': 20000, 'Liquidités': 15000, 'Société': 200000,
+      };
+      out.actifs = out.actifs.map(a => ({
+        ...a,
+        valeur: a.valeur > 0 ? a.valeur : (defauts[a.type] || 50000),
+        categorie: a.categorie || 'financier',
+        type: a.type || 'Autre',
+        pays: a.pays || 'France',
+      }));
+    }
+    return out;
+  };
 
   const complete = (updatedHistory) => {
     setTimeout(async () => {
       if (isDemoMode) { onComplete(null); return; }
       const userData = await extractUserData(updatedHistory);
-      onComplete(userData || PROFIL_VIDE);
+      onComplete(sanitizeUserData(userData));
     }, 1200);
   };
 
@@ -198,7 +267,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     if (isDemoMode) { onComplete(null); }
     else {
       const userData = await extractUserData(messages);
-      onComplete(userData || PROFIL_VIDE);
+      onComplete(sanitizeUserData(userData));
     }
     setUpdating(false);
   };
@@ -228,7 +297,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey }) {
     if (!saved) return;
     setLoading(true);
     const userData = await extractUserData(saved);
-    onComplete(userData || PROFIL_VIDE);
+    onComplete(sanitizeUserData(userData));
     setLoading(false);
   };
 
