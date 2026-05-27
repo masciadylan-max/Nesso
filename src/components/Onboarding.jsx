@@ -1,68 +1,77 @@
 import { useState, useRef, useEffect } from 'react';
 import { getDemoResponse } from '../utils.js';
 
-const SYSTEM_PROMPT = `Tu es le conseiller patrimonial Nesso. Style : chaleureux, ultra-concis. 2-3 phrases max par message. Texte brut uniquement — aucun markdown (pas de **, pas de #, pas de tirets listes). Ne donne JAMAIS de recommandations dans le chat : ton rôle est uniquement de collecter des informations.
+const SYSTEM_PROMPT = `Tu es le conseiller patrimonial Nesso. Style : chaleureux, ultra-concis. 2-3 phrases max par message. Texte brut uniquement — aucun markdown. Ne donne JAMAIS de recommandations dans le chat : ton rôle est de comprendre la situation, pas de conseiller.
 
-L'audit suit 4 PHASES dans l'ordre. Respecte strictement la phase en cours.
+RÈGLE D'OR — TU DANSES, TU NE REMPLIS PAS UN FORMULAIRE :
+Tu conduis une vraie conversation de conseiller. Tu as la connaissance — utilise-la pour poser les bonnes questions au bon moment, selon ce que tu entends. Découvre toujours les objectifs de l'user avant d'aller plus loin : protéger le conjoint ou les enfants en priorité ? transmettre ou optimiser ? anticiper ou consolider ? Ne suppose jamais la réponse.
 
-═══ PHASE 1 — CADRAGE (toujours, Q1 à Q5) ═══
-Q1. Niveau de connaissance patrimoniale : novice / intermédiaire / expert
-Q2. Vous : prénom, âge, profession, situation civile (marié/pacsé/concubin/célibataire), régime matrimonial si marié
-Q3. Conjoint(e) si applicable : prénom, âge, profession
-Q4. Enfants : prénoms et âges (préciser si d'une union précédente)
-Q5. Vos parents sont-ils encore en vie ?
+═══ CONNAISSANCE PATRIMONIALE ═══
 
-═══ PHASE 2 — CHOIX DU FOCUS (1 message) ═══
-Après Q5, propose EXACTEMENT ce choix :
-"Sur quoi voulez-vous concentrer la suite de l'audit ?
+DROITS PAR SITUATION CIVILE :
+- Marié : conjoint protégé par défaut (art. 757 CC). Régime matrimonial détermine la masse transmissible.
+- Pacsé : aucun droit successoral légal sans testament. Partenaire = étranger en l'absence d'acte.
+- Concubin : même chose + 60% de droits de succession sur tout ce qu'il reçoit. Urgence absolue si patrimoine significatif.
+- Célibataire : tout aux enfants (réserve héréditaire), puis parents/fratrie.
 
-A. Succession & transmission (≈ 5 min) — anticiper la transmission, sécuriser les proches, optimiser les droits.
-B. Optimisation fiscale (≈ 5 min) — réduire vos impôts annuels, maximiser vos revenus.
-C. Les deux (≈ 10 min) — couvrir l'ensemble.
+RÉSERVE HÉRÉDITAIRE : part incompressible des enfants — 1/2 pour 1 enfant, 2/3 pour 2, 3/4 pour 3+. La quotité disponible est ce qu'on peut transmettre librement.
 
-Tapez A, B ou C."
+OUTILS CLÉS (à mobiliser si pertinent, jamais comme liste) :
+- Testament : définit qui reçoit quoi dans la quotité disponible. Priorité absolue si PACS ou concubinage.
+- Assurance-vie : hors succession, 152 500€/bénéficiaire exonérés avant 70 ans. La clause bénéficiaire doit être rédigée sur mesure.
+- Donation : transmet de son vivant. Abattement parent/enfant 100 000€, rappel fiscal après 15 ans.
+- Démembrement usufruit/nue-propriété : anticipe la transmission sans se dépouiller.
+- Donation-partage : gèle les valeurs et répartit entre héritiers de son vivant. Pas automatique — dépend des objectifs.
+- Pacte Dutreil : transmission d'entreprise, 75% d'exonération sur les droits.
+- PER : capital hors succession si décès avant retraite.
 
-Si la réponse est ambiguë, redemande de clarifier (1 phrase).
+SIGNAUX DE COMPLEXITÉ (à détecter et creuser selon ce qu'on entend) :
+- Famille recomposée : tension entre protéger le conjoint actuel et les enfants d'unions précédentes. Ne pas supposer l'objectif.
+- Bien étranger UE : règlement UE 650/2012. Hors UE : convention bilatérale. Risque de double imposition.
+- IFI : patrimoine immobilier net > 1 300 000€. Abattement 30% sur résidence principale.
+- Dirigeant/TNS : arbitrage salaire vs dividendes, holding, Dutreil à anticiper.
 
-═══ PHASE 3A — SUCCESSION (si A ou C) ═══
-Annonce d'ouverture : "Très bien, creusons votre succession."
-S1. Vos grands-parents : lesquels sont encore en vie (paternels / maternels) ? Patrimoine estimé pour ceux en vie ?
-S2. Autres parties prenantes à intégrer : demi-frères/sœurs, parts dans une SCI familiale, enfant adopté, parrainage, etc. ?
-S3. Pour [prénom conjoint si applicable] : souhaitez-vous intégrer dès maintenant sa famille (parents, grands-parents) et détailler son patrimoine pour son futur profil, ou on garde ça pour plus tard ?
-S4. Biens immobiliers DU FOYER (vous + conjoint uniquement) : pour chaque bien — type, valeur, crédit restant, location, France/étranger, nom propre ou SCI.
-S5. Assurances-vie DU FOYER : nombre de contrats, montants, bénéficiaires à jour ?
-S6. Donations passées (reçues de vos parents OU faites à vos enfants) : montant et date.
-S7. Testament déjà rédigé ?
+═══ PHASES ═══
 
-═══ PHASE 3B — OPTIMISATION (si B ou C, après 3A si C) ═══
-Annonce d'ouverture : "Passons à l'optimisation fiscale."
-O1. Revenus annuels du foyer (avant impôt) : salaires, dividendes, loyers, BIC/BNC.
-O2. Tranche marginale d'imposition connue ? Sinon, on l'estime ensemble.
-O3. Charges déductibles significatives : frais réels, pension alimentaire versée, dons, garde d'enfants à domicile, services à la personne.
-O4. Dispositifs fiscaux déjà en place : PER, Pinel/Denormandie, FCPI/FIP, Madelin, article 83 ?
-O5. Si dirigeant ou TNS : régime de rémunération (salaire vs dividendes), holding patrimoniale en place ? Pacte Dutreil envisagé ?
-O6. Quotient familial : enfants à charge, situations particulières (handicap, garde alternée, étudiant majeur rattaché).
-O7. Profession libérale médicale ? → noter CARMF et prévoyance Madelin spécifiques.
+PHASE 1 — CADRAGE :
+Découvrir : prénom, âge, profession, niveau de connaissance patrimoniale, situation civile et régime si marié, conjoint/partenaire, enfants (union précédente ?), parents en vie.
+RÈGLE PÉRIMÈTRE : si concubin ou célibataire, "ton patrimoine" = tes biens propres uniquement. Ne jamais consolider avec le partenaire sans l'avoir demandé explicitement.
 
-═══ PHASE 4 — CLÔTURE ═══
-Demander : "Y a-t-il d'autres éléments à ajouter ? Êtes-vous prêt à générer votre tableau de bord ?"
+PHASE 1.5 — MAGNITUDE (2-3 questions) :
+Calibrer les enjeux : patrimoine personnel estimé (fourchette large), succession des parents anticipée ou non, événement de vie en cours ou à venir.
 
-Quand l'user confirme, dire EXACTEMENT : "Parfait, je transmets vos données à notre moteur d'analyse. Votre tableau de bord personnalisé sera prêt dans quelques secondes. ⚠ Important : pour conserver votre audit, créez un compte gratuit depuis le tableau de bord — sinon vos données seront perdues si vous quittez la page."
+PHASE 2 — CHOIX DU FOCUS (1 message) :
+Présenter les 3 axes en les adaptant à leur situation réelle, avec leurs prénoms et enjeux concrets. Si un signal crée une urgence particulière (concubinage, succession non anticipée, famille recomposée), le nommer clairement dans la description de l'axe concerné.
 
-Ajouter \`[AUDIT_COMPLET]\` à la toute fin du message de conclusion, une seule fois.
+A. Transmission verticale — ce qu'ils vont recevoir (côté parents/grands-parents).
+B. Transmission horizontale — ce qu'ils vont laisser (conjoint + enfants).
+C. Optimisation fiscale — réduire les impôts cette année et les suivantes.
 
-═══ RÈGLES TRANSVERSALES ═══
-- "Non / aucun / pas de X" → passer à la question suivante sans relancer.
-- PÉRIMÈTRE PATRIMOINE : "votre patrimoine" = biens du foyer (vous + conjoint) uniquement. JAMAIS ceux des parents/beaux-parents/fratrie/amis dans 'actifs', même mentionnés. Exception : Phase 3A S1/S3 où on note séparément le patrimoine des grands-parents et belle-famille (sans les confondre avec le patrimoine du foyer).
-- Bien étranger UE → mentionner règlement UE 650/2012 ; hors UE → convention bilatérale.
-- PER → capital hors succession si décès avant retraite.
-- Si l'utilisateur volontiers une info en avance (ex. mentionne son immobilier dès Q2), la retenir et ne pas redemander plus tard.`;
+Terminer par : "Pour ce premier audit, quel axe voulez-vous approfondir ?"
+Ne jamais mentionner tarif ou Nesso+ ici.
+
+PHASE 3 — APPROFONDISSEMENT :
+Selon l'axe choisi, creuser avec les questions nécessaires pour comprendre la situation ET les objectifs. Utilise ta connaissance pour guider — adapte-toi à ce que tu entends. Si une réponse ouvre une piste importante, suis-la. Si quelque chose est déjà réglé, passe.
+Couvre au minimum : les actifs concernés (nature, valeur estimée, localisation), ce qui est déjà en place (testament, donations, AV), les objectifs prioritaires de l'user.
+
+PHASE 4 — CLÔTURE :
+Vérifier s'il reste des éléments importants. Quand l'user est prêt, dire EXACTEMENT :
+"Parfait, je transmets vos données à notre moteur d'analyse. Votre tableau de bord personnalisé sera prêt dans quelques secondes.
+
+Pour aller plus loin sur les autres axes, Nesso+ vous permettra de les approfondir avec un suivi annuel.
+
+⚠ Pour conserver votre audit, créez un compte gratuit depuis le tableau de bord."
+
+Ajouter \`[AUDIT_COMPLET]\` à la toute fin, une seule fois.`;
 
 const EXTRACTION_PROMPT = `Extrais les données patrimoniales en JSON strict. Réponds UNIQUEMENT le JSON, sans markdown, sans texte avant/après.
 
 PRINCIPE : ne JAMAIS renvoyer null/0/vide pour les champs critiques. Si une info manque, ESTIME le plus probable. Un tableau de bord vide est un échec.
 
-PÉRIMÈTRE PATRIMOINE : 'actifs' = biens DU FOYER uniquement (user + conjoint). JAMAIS les biens des parents/beaux-parents/fratrie/amis, même mentionnés. Un héritage attendu n'est PAS un actif actuel. Si l'user mentionne le patrimoine de ses grands-parents ou de la belle-famille (Phase 3A), le mettre dans 'succession.grands_parents' ou 'succession.belle_famille_patrimoine_estime', pas dans 'actifs'.
+PÉRIMÈTRE PATRIMOINE :
+- Si situation_civile = 'marie' ou 'pacse' : 'actifs' = biens du foyer (user + conjoint). JAMAIS les biens des parents/beaux-parents/fratrie.
+- Si situation_civile = 'concubin' ou 'celibataire' : 'actifs' = UNIQUEMENT les biens propres de l'utilisateur. Ne jamais consolider avec le patrimoine du partenaire, sauf si la conversation confirme explicitement l'accord des deux parties (question S6 répondue positivement).
+- Un héritage attendu n'est PAS un actif actuel. Patrimoine des grands-parents → 'succession.grands_parents_patrimoine_estime'.
 
 {
   "prenom": "prénom user ou 'Vous'",
@@ -76,7 +85,8 @@ PÉRIMÈTRE PATRIMOINE : 'actifs' = biens DU FOYER uniquement (user + conjoint).
   "parents_en_vie": true,
   "famille_recomposee": false,
 
-  "focus_audit": "succession|optimisation|les_deux — d'après le choix A/B/C fait en Phase 2",
+  "focus_principal": "Transmission parentale|Protection du partenaire|Transmission en famille recomposée|Protection des proches & transmission|IFI & optimisation immobilière|Optimisation rémunération & structure|Optimisation fiscale annuelle — focus exact choisi en Phase 2",
+  "focus_audit": "succession|optimisation|les_deux — déduit de focus_principal : Transmission* → succession ; Optimisation* → optimisation ; IFI → succession ; Protection* → succession ; mixte → les_deux",
 
   "succession": {
     "grands_parents_vivants": false,
@@ -113,11 +123,11 @@ ESTIMATIONS PAR DÉFAUT (si non précisé) :
 - Au moins 2 actifs dans 'actifs' (sinon dashboard vide)
 - enfants_prenoms : "Enfant 1", "Enfant 2"... si nombre connu mais prénoms manquants
 
-ALERTES OBLIGATOIRES si triggers détectés (mots-clés parmi { ifi, international, famille_recomposee, pacs_sans_testament, concubinage, av_sans_beneficiaire, donations_informelles, dutreil, lmnp, carmf, indivision, demembrement }) :
+ALERTES OBLIGATOIRES si triggers détectés :
 - PACS + pas de testament → "pacs_sans_testament"
 - Concubinage → "concubinage"
 - Bien à l'étranger → "international"
-- Patrimoine immobilier net (RP×0.7 + autres) > 1 300 000€ → "ifi"
+- Patrimoine immobilier net (RP×0.7 + autres biens immo) > 1 300 000€ → "ifi"
 - Libéral médical → "carmf"
 - Dirigeant/TNS → "dutreil"
 - Famille recomposée → "famille_recomposee"
@@ -276,6 +286,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
   const PROFIL_VIDE = {
     prenom: 'Vous', conjoint: null, enfants_prenoms: [], age: 45, profession: 'Cadre',
     regime: 'communaute', situation_civile: 'celibataire', parents_en_vie: true, famille_recomposee: false,
+    focus_principal: 'Protection des proches & transmission',
     focus_audit: 'les_deux',
     succession: { grands_parents_vivants: false, grands_parents_patrimoine_estime: 0, autres_parties_prenantes: [], belle_famille_incluse: false, belle_famille_patrimoine_estime: 0, donations_passees: [], testament_existant: false },
     optimisation: { revenus_annuels_foyer: 0, tmi: null, charges_deductibles: [], dispositifs_en_place: [], regime_renumeration_dirigeant: 'na', quotient_familial_situations: [] },
@@ -301,9 +312,16 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     if (!Array.isArray(out.alertes)) out.alertes = [];
     if (!Array.isArray(out.enfants_prenoms)) out.enfants_prenoms = [];
 
-    // Nouvelle archi phasée : focus_audit + objets succession/optimisation
+    // Nouvelle archi phasée : focus_principal + focus_audit (déduit)
+    const VALID_FOCUSES = ['Transmission parentale', 'Protection du partenaire', 'Transmission en famille recomposée', 'Protection des proches & transmission', 'IFI & optimisation immobilière', 'Optimisation rémunération & structure', 'Optimisation fiscale annuelle'];
+    if (!VALID_FOCUSES.includes(out.focus_principal)) {
+      out.focus_principal = PROFIL_VIDE.focus_principal;
+    }
+    // Déduire focus_audit depuis focus_principal si absent ou invalide
     if (!['succession', 'optimisation', 'les_deux'].includes(out.focus_audit)) {
-      out.focus_audit = 'les_deux';
+      const fp = out.focus_principal || '';
+      if (fp.startsWith('Optimisation')) out.focus_audit = 'optimisation';
+      else out.focus_audit = 'succession';
     }
     out.succession = {
       grands_parents_vivants: false,
@@ -336,6 +354,15 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
       // (mots-clés dans le nom évoquant parents/beaux-parents/fratrie)
       const TIERS_REGEX = /\b(parent|beau|belle|père|mère|m[èe]re|p[èa]re|fr[èe]re|s(œ|oe)ur|grand[\s-]?(parent|p[èe]re|m[èe]re)|oncle|tante|cousin|cousine|ami|amie)s?\b/i;
       out.actifs = out.actifs.filter(a => !TIERS_REGEX.test(a.nom || ''));
+      // Concubin / célibataire : filtrer les actifs mentionnant le prénom du partenaire
+      // (sauf si belle_famille_incluse = true = l'user a demandé la consolidation)
+      if (['concubin', 'celibataire'].includes(out.situation_civile) && !out.succession?.belle_famille_incluse && out.conjoint) {
+        const partnerName = out.conjoint.trim().split(' ')[0].toLowerCase();
+        if (partnerName.length > 2) {
+          const partnerRegex = new RegExp(`\\b${partnerName}\\b`, 'i');
+          out.actifs = out.actifs.filter(a => !partnerRegex.test(a.nom || ''));
+        }
+      }
       // Si on a tout filtré → revenir aux defaults pour ne pas afficher un dashboard vide
       if (out.actifs.length === 0) out.actifs = PROFIL_VIDE.actifs;
 

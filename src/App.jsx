@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ACTIFS } from './data.js';
 import { supabase } from './lib/supabase.js';
 import Navbar from './components/Navbar.jsx';
@@ -80,6 +80,10 @@ export default function App() {
 
   const [authUser, setAuthUser]       = useState(null);
   const [view, setView]               = useState(initialProfile ? 'dashboard' : 'onboarding');
+  // Ref always up-to-date with view — permet aux callbacks auth (closures) de savoir
+  // si l'user est en train de faire un audit → ne pas rediriger vers le dashboard.
+  const viewRef = useRef(initialProfile ? 'dashboard' : 'onboarding');
+  const _setView = (v) => { viewRef.current = v; setView(v); };
   const [passwordRecovery, setPasswordRecovery] = useState(initialRecovery);
   const [pov, setPov]                 = useState(initialProfile ? 'user' : 'user');
   const [actifs, setActifs]           = useState(initialActifs || ACTIFS);
@@ -98,7 +102,7 @@ export default function App() {
   // Si l'user est sur la vue 'compte' mais se déconnecte, rediriger vers onboarding
   useEffect(() => {
     if (view === 'compte' && !authUser) {
-      setView(userProfile ? 'dashboard' : 'onboarding');
+      _setView(userProfile ? 'dashboard' : 'onboarding');
     }
   }, [view, authUser, userProfile]);
 
@@ -109,7 +113,8 @@ export default function App() {
       // INITIAL_SESSION : premier event au démarrage, fire toujours (avec ou sans session)
       if (event === 'INITIAL_SESSION') {
         setAuthUser(session?.user ?? null);
-        if (session?.user) {
+        // Ne pas rediriger vers le dashboard si l'user est en train de faire un audit
+        if (session?.user && viewRef.current !== 'onboarding') {
           try { await loadUserData(session.user.id); } catch (e) { console.error('loadUserData error:', e); }
         }
         return;
@@ -125,6 +130,8 @@ export default function App() {
 
       setAuthUser(session?.user ?? null);
       if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        // Ne pas interrompre un audit en cours
+        if (viewRef.current === 'onboarding') return;
         setShowAuth(false);
         try {
           const { data } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
@@ -133,7 +140,7 @@ export default function App() {
             setUserProfile(data.profile_json);
             setActifs(data.actifs_json || ACTIFS);
             setPov(data.pov || 'user');
-            setView('dashboard');
+            _setView('dashboard');
           } else {
             // Nouveau compte → migrer depuis localStorage avec gestion d'erreur (bug #6)
             const savedProfile = LS.get('nesso_user_profile', null);
@@ -156,14 +163,14 @@ export default function App() {
               setUserProfile(savedProfile);
               setActifs(savedActifs || ACTIFS);
               setPov('user');
-              setView('dashboard');
+              _setView('dashboard');
             }
           }
         } catch (e) {
           console.error('Auth state change error:', e);
         }
       } else if (event === 'SIGNED_OUT') {
-        setView('onboarding');
+        _setView('onboarding');
         setUserProfile(null);
         setActifs(ACTIFS);
         LS.del('nesso_view', 'nesso_pov', 'nesso_user_profile', 'nesso_user_actifs');
@@ -179,7 +186,7 @@ export default function App() {
       setUserProfile(data.profile_json);
       setActifs(data.actifs_json || ACTIFS);
       setPov(data.pov || 'user');
-      setView('dashboard');
+      _setView('dashboard');
     }
     // Si pas de données pour ce user, on garde l'affichage initial (onboarding)
   };
@@ -198,7 +205,7 @@ export default function App() {
     setUserProfile(newProfile);
     setActifs(userActifs);
     setPov(newPov);
-    setView('dashboard');
+    _setView('dashboard');
 
     if (authUser) {
       await saveToSupabase(authUser.id, { userProfile: newProfile, actifs: userActifs, pov: newPov });
@@ -231,13 +238,22 @@ export default function App() {
     }
   };
 
+  // Navigation non-destructive vers l'onboarding (les données Supabase sont préservées)
+  // → utilisée par le logo Nesso et le bouton "Refaire mon audit" du dashboard
+  const handleGoToOnboarding = () => {
+    LS.del('nesso_messages'); // Efface la conversation précédente pour repartir à zéro
+    _setView('onboarding');
+  };
+
+  // Réinitialisation COMPLÈTE (supprime données Supabase + localStorage)
+  // → réservée à "Supprimer mes données" dans les paramètres du compte
   const handleReset = async () => {
     if (authUser) await supabase.from('user_data').delete().eq('id', authUser.id);
     LS.del('nesso_view', 'nesso_pov', 'nesso_user_profile', 'nesso_user_actifs', 'nesso_messages');
     setUserProfile(null);
     setActifs(ACTIFS);
     setPov('user');
-    setView('onboarding');
+    _setView('onboarding');
   };
 
   const handleLogout = async () => {
@@ -285,10 +301,10 @@ export default function App() {
   return (
     <div style={{ minHeight: '100vh', background: '#F5F0EA' }}>
       <Navbar
-        view={view} setView={setView}
+        view={view} setView={_setView}
         pov={pov} setPov={setPov}
         onApiKey={() => setShowApiKey(true)}
-        onReset={handleReset}
+        onReset={handleGoToOnboarding}
         onLogout={authUser ? handleLogout : null}
         userEmail={authUser?.email}
         userProfile={userProfile}
@@ -311,12 +327,12 @@ export default function App() {
       )}
 
       <main>
-        {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} />}
+        {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} onRefairAudit={handleGoToOnboarding} />}
         {view === 'famille'         && <Famille      pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
         {view === 'actifs'          && <Actifs       pov={pov} actifs={actifs} setActifs={handleSetActifs} userProfile={userProfile} />}
         {view === 'aide'            && <Aide         pov={pov} apiKey={apiKey} actifs={actifs} />}
         {view === 'compte' && authUser && (
-          <Compte authUser={authUser} userProfile={userProfile} onLogout={handleLogout} onView={setView} />
+          <Compte authUser={authUser} userProfile={userProfile} onLogout={handleLogout} onView={_setView} onResetData={handleReset} />
         )}
         {view === 'confidentialite' && <Confidentialite />}
       </main>

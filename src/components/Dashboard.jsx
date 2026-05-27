@@ -77,7 +77,7 @@ const generateUserActions = (userProfile, patrimoine) => {
   return actions.slice(0, 3);
 };
 
-export default function Dashboard({ pov, actifs, userProfile }) {
+export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   // Ouvre le bon onglet selon le focus choisi par l'user en Phase 2 de l'audit
   const initialTab = userProfile?.focus_audit === 'optimisation' ? 'optimisation' : 'succession';
   const [tab, setTab] = useState(initialTab);
@@ -170,14 +170,22 @@ export default function Dashboard({ pov, actifs, userProfile }) {
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 24px 100px' }} className="fade-in">
 
       {/* Header */}
-      <div style={{ marginBottom: 36 }}>
-        <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Tableau de bord</p>
-        <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, fontWeight: 700, margin: 0 }}>
-          Bonjour, {person?.prenom} <span style={{ color: '#C9A96E' }}>✦</span>
-        </h1>
-        <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>
-          Situation patrimoniale au {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 36, flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Tableau de bord</p>
+          <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, fontWeight: 700, margin: 0 }}>
+            Bonjour, {person?.prenom} <span style={{ color: '#C9A96E' }}>✦</span>
+          </h1>
+          <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>
+            Situation patrimoniale au {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
+        {onRefairAudit && (
+          <button onClick={onRefairAudit}
+            style={{ background: 'white', border: '1px solid #E5E7EB', color: '#6B7280', borderRadius: 9, padding: '9px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            ↺ Refaire mon audit
+          </button>
+        )}
       </div>
 
       {/* 3 cartes du haut */}
