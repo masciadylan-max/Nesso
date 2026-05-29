@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CALCULS, ACTIONS } from '../data.js';
-import { euro, getPersonne, getPatrimoine } from '../utils.js';
+import { euro, getPersonne, getPatrimoine, filterActifsByPov } from '../utils.js';
 import { Badge, Skeleton, Modal } from './Shared.jsx';
 
 const computeUserCalculs = (patrimoine, userProfile) => {
@@ -90,10 +90,33 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   const [showNessoPlus, setShowNessoPlus] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const isUserPov = pov === 'user' && userProfile;
+  // POV 'foyer' = vue consolidée du ménage (user + conjoint)
+  const isFoyerPov  = pov === 'foyer' && userProfile;
+  const isUserPov   = (pov === 'user' || isFoyerPov) && userProfile;
   // Détecte les POV "famille de l'user" extraits de l'audit (conjoint, enfant_0, enfant_1...)
   // On a peu d'infos sur eux : on affichera une vue limitée + CTA Nesso+ / espace dédié.
   const isFamilyMemberPov = userProfile && (pov === 'conjoint' || pov.startsWith?.('enfant_'));
+  // POV Nesso+ verrouillés
+  const isLockedPov = pov === 'parents' || pov === 'grands_parents';
+
+  // Vue Nesso+ verrouillée (parents / grands-parents)
+  if (isLockedPov) {
+    const lockedLabel = pov === 'parents' ? 'Mes parents' : 'Mes grands-parents';
+    return (
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '36px 24px 100px' }} className="fade-in">
+        <div className="card" style={{ padding: 40, textAlign: 'center', background: 'linear-gradient(135deg, #FFFDF9 0%, #FFF8EE 100%)', border: '1px solid #FDE8C8' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#1B2B4B', color: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, margin: '0 auto 18px' }}>🔒</div>
+          <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 26, margin: '0 0 12px' }}>{lockedLabel}</h2>
+          <p style={{ color: '#6B7280', fontSize: 14, lineHeight: 1.7, maxWidth: 500, margin: '0 auto 24px' }}>
+            L'analyse du patrimoine de vos {lockedLabel.toLowerCase()} et la simulation de la transmission sur deux générations sont disponibles avec <strong>Nesso+</strong>.
+          </p>
+          <div style={{ display: 'inline-block', background: '#1B2B4B', color: '#C9A96E', padding: '10px 24px', borderRadius: 20, fontSize: 13, fontWeight: 600, letterSpacing: '0.05em' }}>
+            ✦ Disponible avec Nesso+
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Vue limitée pour conjoint / enfants (peu de données disponibles)
   if (isFamilyMemberPov) {
@@ -140,12 +163,24 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
     );
   }
 
+  // Actifs filtrés pour ce POV (évite la fusion des patrimoines)
+  const povActifs = filterActifsByPov(actifs, pov);
+
   const person = isUserPov
-    ? { prenom: userProfile.prenom || 'Vous', age: userProfile.age, role: 'Utilisateur', profession: userProfile.profession }
+    ? {
+        prenom: isFoyerPov
+          ? `${userProfile.prenom || 'Vous'}${userProfile.conjoint ? ` + ${userProfile.conjoint}` : ''}`
+          : (userProfile.prenom || 'Vous'),
+        age: userProfile.age, role: isFoyerPov ? 'Foyer' : 'Utilisateur', profession: userProfile.profession,
+      }
     : (getPersonne(pov) || { prenom: 'Inconnu', age: null, role: '—', profession: null });
-  const patrimoine = getPatrimoine(pov, actifs);
-  const calculs = isUserPov ? computeUserCalculs(patrimoine, userProfile) : (CALCULS[pov] || CALCULS.lucas);
-  const actions = isUserPov ? generateUserActions(userProfile, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
+
+  // Calcul du patrimoine sur les actifs filtrés du POV
+  const patrimoine = getPatrimoine(pov, povActifs);
+  // computeUserCalculs a besoin du userProfile avec les actifs filtrés pour IFI
+  const userProfileForPov = isUserPov ? { ...userProfile, actifs: povActifs } : null;
+  const calculs = isUserPov ? computeUserCalculs(patrimoine, userProfileForPov) : (CALCULS[pov] || CALCULS.lucas);
+  const actions = isUserPov ? generateUserActions(userProfileForPov, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
 
   // Total toutes économies identifiées (succession + actions chiffrées)
   const totalEconomiesActions = actions.reduce((sum, a) => sum + (a.economie > 0 ? a.economie : 0), 0);
@@ -172,9 +207,11 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 36, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Tableau de bord</p>
+          <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>
+            {isFoyerPov ? 'Vue consolidée du foyer' : 'Tableau de bord'}
+          </p>
           <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, fontWeight: 700, margin: 0 }}>
-            Bonjour, {person?.prenom} <span style={{ color: '#C9A96E' }}>✦</span>
+            {isFoyerPov ? person?.prenom : `Bonjour, ${person?.prenom}`} <span style={{ color: '#C9A96E' }}>✦</span>
           </h1>
           <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>
             Situation patrimoniale au {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -192,7 +229,9 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginBottom: 24 }}>
 
         <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: '#7A7A8C', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>Patrimoine propre</p>
+          <p style={{ color: '#7A7A8C', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>
+            {isFoyerPov ? 'Patrimoine du foyer' : 'Patrimoine'}
+          </p>
           {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : patrimoine > 0 ? (
             <p className="font-serif" style={{ color: '#1B2B4B', fontSize: 38, fontWeight: 700, margin: '0 0 12px' }}>{euro(patrimoine)}</p>
           ) : (

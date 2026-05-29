@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { euro, getPersonne, getProprietaireLabel } from '../utils.js';
+import { euro, getPersonne, getProprietaireLabel, filterActifsByPov } from '../utils.js';
 import { Modal } from './Shared.jsx';
 
 const CAT_ICONS  = { immobilier: '🏠', financier: '💰', professionnel: '🏢', exotique: '💎' };
@@ -16,18 +16,33 @@ const resolvePovLabel = (pov, userProfile) => {
   return getPersonne(pov)?.prenom || pov;
 };
 
+// Label du POV pour l'en-tête
+const povTitle = (pov, userProfile) => {
+  if (!userProfile) return 'Patrimoine familial';
+  if (pov === 'foyer') return `Foyer — ${userProfile.prenom || 'Vous'}${userProfile.conjoint ? ` + ${userProfile.conjoint}` : ''}`;
+  if (pov === 'user') return `${userProfile.prenom || 'Vous'}`;
+  if (pov === 'conjoint') return userProfile.conjoint || 'Conjoint(e)';
+  if (pov?.startsWith?.('enfant_')) {
+    const i = parseInt(pov.split('_')[1], 10);
+    return userProfile?.enfants_prenoms?.[i] || 'Enfant';
+  }
+  return getPersonne(pov)?.prenom || 'Patrimoine familial';
+};
+
 export default function Actifs({ pov, actifs, setActifs, userProfile }) {
   const [filter, setFilter]   = useState('tous');
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm]       = useState({ nom: '', categorie: 'immobilier', valeur: '', type: 'Résidence principale', pays: 'France', note: '' });
 
-  const displayed = filter === 'tous' ? actifs : actifs.filter(a => a.categorie === filter);
+  // Filtrer les actifs selon le POV courant
+  const povActifs  = filterActifsByPov(actifs, pov);
+  const displayed  = filter === 'tous' ? povActifs : povActifs.filter(a => a.categorie === filter);
   const byCategorie = displayed.reduce((acc, a) => { (acc[a.categorie] = acc[a.categorie] || []).push(a); return acc; }, {});
 
   const totals = ['immobilier', 'financier', 'professionnel', 'exotique'].reduce((acc, cat) => {
-    acc[cat] = actifs.filter(a => a.categorie === cat).reduce((s, a) => s + a.valeur, 0);
+    acc[cat] = povActifs.filter(a => a.categorie === cat).reduce((s, a) => s + a.valeur, 0);
     return acc;
-  }, { total: actifs.reduce((s, a) => s + a.valeur, 0) });
+  }, { total: povActifs.reduce((s, a) => s + a.valeur, 0) });
 
   const addActif = () => {
     if (!form.nom.trim() || !form.valeur) return;
@@ -44,7 +59,7 @@ export default function Actifs({ pov, actifs, setActifs, userProfile }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32, flexWrap: 'wrap', gap: 16 }}>
         <div>
           <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Mes actifs</p>
-          <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, margin: 0 }}>Patrimoine familial</h1>
+          <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 34, margin: 0 }}>{povTitle(pov, userProfile)}</h1>
           <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>Total estimé : <strong style={{ color: '#1B2B4B' }}>{euro(totals.total)}</strong></p>
         </div>
         <button className="btn-gold" onClick={() => setShowAdd(true)}>+ Ajouter un actif</button>
@@ -88,7 +103,7 @@ export default function Actifs({ pov, actifs, setActifs, userProfile }) {
                 <p className="font-serif" style={{ color: '#C9A96E', fontSize: 28, fontWeight: 700, margin: '0 0 14px' }}>{euro(actif.valeur)}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
                   {[
-                    ['Propriétaire(s)', getProprietaireLabel(actif.proprietaires), null],
+                    ['Propriétaire(s)', getProprietaireLabel(actif.proprietaires, userProfile), null],
                     actif.proprietaires.length > 1 ? ['Quote-part / pers.', euro(actif.valeur / actif.proprietaires.length), null] : null,
                     actif.pays ? ['Pays', actif.pays, actif.pays !== 'France' ? '#F59E0B' : null] : null,
                     actif.beneficiaire ? ['Bénéficiaire', actif.beneficiaire, null] : null,

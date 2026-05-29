@@ -110,7 +110,11 @@ Passage en communauté universelle avec clause d'attribution intégrale → conj
 
 ═══ PHASES ═══
 
-PHASE 1 — CADRAGE :
+FORMULAIRE DE CADRAGE — SI PRÉSENT :
+Si le premier message contient "DONNÉES DE CADRAGE — FORMULAIRE NESSO", les informations fournies remplacent intégralement la Phase 1 et la Phase 1.5. Ne JAMAIS redemander ces informations.
+Première réponse : accueillir chaleureusement par le prénom, valider le focus choisi en une phrase, poser immédiatement la première vraie question de Phase 3. Adapter le niveau de technicité au niveau de connaissance déclaré (débutant = vulgariser, expert = aller direct).
+
+PHASE 1 — CADRAGE (sans formulaire) :
 Découvrir : prénom, âge, profession, niveau de connaissance patrimoniale, situation civile et régime si marié, conjoint/partenaire, enfants (union précédente ?), parents en vie, grands-parents en vie.
 RÈGLE PÉRIMÈTRE : si concubin ou célibataire, "votre patrimoine" = vos biens propres uniquement. Ne jamais consolider avec le partenaire sans l'avoir demandé.
 
@@ -195,8 +199,22 @@ PÉRIMÈTRE PATRIMOINE :
   },
 
   "actifs": [
-    {"nom": "description courte", "categorie": "immobilier|financier|professionnel|exotique", "valeur": 250000, "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|Assurance-vie|PEA|PER|Liquidités|Société|Autre", "pays": "France"}
+    {
+      "nom": "description courte",
+      "categorie": "immobilier|financier|professionnel|exotique",
+      "valeur": 250000,
+      "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|Assurance-vie|PEA|PER|Liquidités|Société|Autre",
+      "pays": "France",
+      "proprietaires": ["user"]
+    }
   ],
+
+RÈGLE PROPRIETAIRES — obligatoire sur chaque actif :
+- ["user"] si l'actif appartient uniquement à l'utilisateur
+- ["conjoint"] si l'actif appartient uniquement au conjoint/partenaire
+- ["user","conjoint"] si l'actif est détenu en commun (résidence principale d'un couple, compte joint…)
+- ["enfant_0"], ["enfant_1"]… si l'actif appartient à un enfant
+- Par défaut si inconnu : ["user"]
 
   "objectifs": "résumé en 1 phrase",
   "score": 60,
@@ -220,6 +238,51 @@ ALERTES OBLIGATOIRES si triggers détectés :
 - Famille recomposée → "famille_recomposee"
 
 Mieux vaut une estimation imparfaite qu'un champ vide. Tranche toujours.`;
+
+// ─── FORMULAIRE DE CADRAGE ───────────────────────────────────────────────────
+const FORM_INIT = {
+  prenom: '', age: '', profession: 'salarié', niveau: 'intermediaire',
+  situation_civile: '', regime: 'communaute', conjoint_prenom: '',
+  enfants: '0', famille_recomposee: false,
+  parents_en_vie: '', parents_orga: '', grands_parents_en_vie: '',
+  patrimoine: '', evenement: '', focus: '',
+};
+
+const buildContextMessage = (f) => {
+  const niveauLabel = { debutant: 'Débutant', intermediaire: 'Intermédiaire', avance: 'Expert' }[f.niveau] || '';
+  const situLabel   = { celibataire: 'Célibataire', marie: 'Marié(e)', pacse: 'Pacsé(e)', concubin: 'En couple (concubinage)' }[f.situation_civile] || '';
+  const regimeLabel = { communaute: 'communauté légale réduite aux acquêts', separation: 'séparation de biens', universel: 'communauté universelle', participation: 'participation aux acquêts' }[f.regime] || '';
+  const patriLabel  = { '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.patrimoine] || '';
+  const focusLabel  = { A: 'A — Ce que je vais recevoir (transmission parentale / grands-parents)', B: 'B — Ce que je vais laisser (protection conjoint et enfants)', C: 'C — Réduire ma fiscalité (optimisation)' }[f.focus] || '';
+  const orgaLabel   = { oui: 'Oui', en_partie: 'En partie', non: 'Non', sais_pas: 'Je ne sais pas' }[f.parents_orga] || '';
+  const nbEnfants   = parseInt(f.enfants) || 0;
+
+  const lines = [
+    'DONNÉES DE CADRAGE — FORMULAIRE NESSO',
+    f.prenom
+      ? `Prénom : ${f.prenom}${f.age ? `, ${f.age} ans` : ''}${f.profession ? `, ${f.profession}` : ''}`
+      : null,
+    niveauLabel ? `Niveau de connaissance patrimoniale : ${niveauLabel}` : null,
+    situLabel
+      ? `Situation civile : ${situLabel}${f.situation_civile === 'marie' && regimeLabel ? ` — régime ${regimeLabel}` : ''}`
+      : null,
+    f.situation_civile && f.situation_civile !== 'celibataire' && f.conjoint_prenom
+      ? `Conjoint(e) / partenaire : ${f.conjoint_prenom}` : null,
+    `Enfants : ${nbEnfants === 0 ? 'Aucun' : nbEnfants}${f.famille_recomposee ? ' — famille recomposée' : ''}`,
+    f.parents_en_vie
+      ? `Parents en vie : ${f.parents_en_vie === 'oui' ? 'Oui' : 'Non'}${f.parents_en_vie === 'oui' && orgaLabel ? ` — transmission organisée : ${orgaLabel}` : ''}`
+      : null,
+    f.grands_parents_en_vie
+      ? `Grands-parents en vie : ${f.grands_parents_en_vie === 'oui' ? 'Oui' : 'Non'}`
+      : null,
+    patriLabel ? `Patrimoine personnel estimé : ${patriLabel}` : null,
+    f.evenement?.trim() ? `Événement de vie : ${f.evenement}` : null,
+    focusLabel ? `Focus choisi : ${focusLabel}` : null,
+  ].filter(Boolean);
+
+  return lines.join('\n');
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Bug #3 : parsing JSON robuste — gère markdown ```json, texte autour, JSON tronqué
 // Tracker de coût pour un audit (réinitialisé à chaque nouveau démarrage)
@@ -329,12 +392,15 @@ const renderText = (text) => {
 };
 
 export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
-  const [started, setStarted]   = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [updating, setUpdating] = useState(false);
-  const [msgCount, setMsgCount] = useState(0);
+  // auditPhase : 'landing' | 'form' | 'chat'
+  const [auditPhase, setAuditPhase] = useState('landing');
+  const [form, setForm]             = useState(FORM_INIT);
+  const [formStep, setFormStep]     = useState(1);
+  const [messages, setMessages]     = useState([]);
+  const [input, setInput]           = useState('');
+  const [loading, setLoading]       = useState(false);
+  const [updating, setUpdating]     = useState(false);
+  const [msgCount, setMsgCount]     = useState(0);
   const endRef = useRef(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
@@ -464,6 +530,11 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
         categorie: a.categorie || 'financier',
         type: a.type || 'Autre',
         pays: a.pays || 'France',
+        // Garantit que chaque actif a un tableau proprietaires valide
+        // Défaut : ['user'] (l'extraction peut ne pas toujours fournir ce champ)
+        proprietaires: Array.isArray(a.proprietaires) && a.proprietaires.length > 0
+          ? a.proprietaires
+          : ['user'],
       }));
     }
 
@@ -495,7 +566,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
 
   const start = async () => {
     resetAuditCost();
-    setStarted(true);
+    setAuditPhase('chat');
     setLoading(true);
     const init = [{ role: 'user', content: 'Bonjour, je voudrais faire le point sur mon patrimoine familial.' }];
     try {
@@ -506,6 +577,28 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
       setMsgCount(1);
     } catch {
       const msgs = [{ role: 'assistant', content: 'Bonjour ! Je suis votre conseiller Nesso. Pour commencer, comment évalueriez-vous votre niveau de connaissance en patrimoine et fiscalité ? Novice, intermédiaire ou expert ?' }];
+      setMessages(msgs);
+      saveMessages(msgs);
+    } finally { setLoading(false); }
+  };
+
+  // Démarre le chat après remplissage du formulaire
+  // Le message de contexte est injecté en "hidden" : présent dans l'historique API mais pas affiché dans l'UI
+  const startWithForm = async (f) => {
+    resetAuditCost();
+    const contextMsg = buildContextMessage(f);
+    const hiddenMsg  = { role: 'user', content: contextMsg, hidden: true };
+    setAuditPhase('chat');
+    setLoading(true);
+    try {
+      const reply = await getReply([hiddenMsg], 0);
+      const msgs = [hiddenMsg, { role: 'assistant', content: reply }];
+      setMessages(msgs);
+      saveMessages(msgs);
+      setMsgCount(1);
+    } catch {
+      const greeting = f.prenom ? `Bonjour ${f.prenom} !` : 'Bonjour !';
+      const msgs = [hiddenMsg, { role: 'assistant', content: `${greeting} Merci pour ces informations. Commençons directement.` }];
       setMessages(msgs);
       saveMessages(msgs);
     } finally { setLoading(false); }
@@ -552,7 +645,9 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     localStorage.removeItem('nesso_messages');
     setMessages([]);
     setMsgCount(0);
-    setStarted(false);
+    setForm(FORM_INIT);
+    setFormStep(1);
+    setAuditPhase('landing');
   };
 
   const handlePasserDashboard = () => { onComplete(null); };
@@ -563,7 +658,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
     if (saved) {
       setMessages(saved);
       setMsgCount(saved.filter(m => m.role === 'user').length);
-      setStarted(true);
+      setAuditPhase('chat');
     }
   };
 
@@ -584,16 +679,26 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
   const savedMessages = getSavedMessages();
   const hasSavedConversation = savedMessages && savedMessages.length > 4;
 
+  // Helpers formulaire
+  const canAdvance = () => {
+    if (formStep === 1) return form.prenom.trim().length > 0;
+    if (formStep === 2) return form.situation_civile !== '';
+    return true;
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: started ? 'center' : 'flex-start', padding: started ? 24 : '60px 24px' }}>
+    <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: auditPhase === 'chat' ? 'center' : 'flex-start', padding: auditPhase === 'chat' ? 24 : '60px 24px' }}>
       <div style={{ maxWidth: 720, width: '100%' }}>
 
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <h1 className="font-serif" style={{ color: '#C9A96E', fontSize: 42, fontWeight: 700, margin: '0 0 8px' }}>Nesso</h1>
-          <p style={{ color: '#1B2B4B', fontSize: 17, margin: 0, lineHeight: 1.5 }}>La solution IA pour gérer le patrimoine et la succession de ta famille</p>
-        </div>
+        {auditPhase !== 'chat' && (
+          <div style={{ textAlign: 'center', marginBottom: 36 }}>
+            <h1 className="font-serif" style={{ color: '#C9A96E', fontSize: 42, fontWeight: 700, margin: '0 0 8px' }}>Nesso</h1>
+            <p style={{ color: '#1B2B4B', fontSize: 17, margin: 0, lineHeight: 1.5 }}>La solution IA pour gérer le patrimoine et la succession de ta famille</p>
+          </div>
+        )}
 
-        {!started ? (
+        {/* ── BRANCHE 1 : LANDING ── */}
+        {auditPhase === 'landing' && (
           <>
           <div className="card" style={{ padding: 40, textAlign: 'center' }}>
             <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', color: '#C9A96E', fontSize: 26 }}>✦</div>
@@ -623,7 +728,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
                   </button>
                 </>
               )}
-              <button className="btn-navy" onClick={start} style={{ width: '100%', padding: '14px', fontSize: 15 }}>
+              <button className="btn-navy" onClick={() => { setForm(FORM_INIT); setFormStep(1); setAuditPhase('form'); }} style={{ width: '100%', padding: '14px', fontSize: 15 }}>
                 {isDemoMode ? 'Démarrer la démo →' : hasSavedConversation ? 'Recommencer un nouvel audit →' : 'Commencer l\'audit →'}
               </button>
               <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'DM Sans, sans-serif' }}>
@@ -747,7 +852,253 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
             </div>
           </div>
           </>
-        ) : (
+        )}
+
+        {/* ── BRANCHE 2 : FORMULAIRE ── */}
+        {auditPhase === 'form' && (
+          <div className="card" style={{ padding: '36px 32px' }}>
+            {/* En-tête + barre de progression */}
+            <div style={{ marginBottom: 28 }}>
+              <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', margin: '0 0 5px' }}>
+                Étape {formStep} sur 4
+              </p>
+              <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 14px' }}>
+                {['Vous', 'Votre famille', 'Votre situation', 'Votre priorité'][formStep - 1]}
+              </h2>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[1,2,3,4].map(s => (
+                  <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= formStep ? '#C9A96E' : '#E5E7EB', transition: 'background 0.3s' }} />
+                ))}
+              </div>
+            </div>
+
+            {/* ── Étape 1 : Vous ── */}
+            {formStep === 1 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre prénom *</label>
+                  <input type="text" value={form.prenom} autoFocus
+                    onChange={e => setForm(p => ({ ...p, prenom: e.target.value }))}
+                    placeholder="Thomas"
+                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre âge</label>
+                    <input type="number" value={form.age} min="18" max="100"
+                      onChange={e => setForm(p => ({ ...p, age: e.target.value }))}
+                      placeholder="38"
+                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                  </div>
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre statut</label>
+                    <select value={form.profession} onChange={e => setForm(p => ({ ...p, profession: e.target.value }))}
+                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}>
+                      <option value="salarié">Salarié(e)</option>
+                      <option value="cadre">Cadre</option>
+                      <option value="dirigeant">Dirigeant / TNS</option>
+                      <option value="libéral">Profession libérale</option>
+                      <option value="retraité">Retraité(e)</option>
+                      <option value="autre">Autre</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Niveau de connaissance patrimoniale</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[['debutant', 'Débutant'], ['intermediaire', 'Intermédiaire'], ['avance', 'Expert']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, niveau: val }))}
+                        style={{ flex: 1, padding: '10px 6px', border: `2px solid ${form.niveau === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.niveau === val ? '#FDF8F0' : 'white', color: form.niveau === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.niveau === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Étape 2 : Famille ── */}
+            {formStep === 2 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Situation civile *</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {[['celibataire', 'Célibataire', '◯'], ['marie', 'Marié(e)', '◎'], ['pacse', 'Pacsé(e)', '◑'], ['concubin', 'En couple', '◐']].map(([val, lbl, ico]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, situation_civile: val }))}
+                        style={{ padding: '12px 8px', border: `2px solid ${form.situation_civile === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 10, background: form.situation_civile === val ? '#F0F4FF' : 'white', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        <div style={{ fontSize: 18, marginBottom: 4, color: '#1B2B4B' }}>{ico}</div>
+                        <div style={{ fontSize: 13, fontWeight: form.situation_civile === val ? 600 : 400, color: form.situation_civile === val ? '#1B2B4B' : '#6B7280' }}>{lbl}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {form.situation_civile === 'marie' && (
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Régime matrimonial</label>
+                    <select value={form.regime} onChange={e => setForm(p => ({ ...p, regime: e.target.value }))}
+                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}>
+                      <option value="communaute">Communauté légale (par défaut)</option>
+                      <option value="separation">Séparation de biens</option>
+                      <option value="universel">Communauté universelle</option>
+                      <option value="participation">Participation aux acquêts</option>
+                    </select>
+                  </div>
+                )}
+                {form.situation_civile && form.situation_civile !== 'celibataire' && (
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
+                      Prénom {form.situation_civile === 'marie' ? 'du conjoint(e)' : form.situation_civile === 'pacse' ? 'du/de la partenaire' : 'du compagnon / de la compagne'}
+                    </label>
+                    <input type="text" value={form.conjoint_prenom}
+                      onChange={e => setForm(p => ({ ...p, conjoint_prenom: e.target.value }))}
+                      placeholder="Marie"
+                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                  </div>
+                )}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Enfants</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['0','1','2','3','4+'].map(n => (
+                      <button key={n} onClick={() => setForm(p => ({ ...p, enfants: n }))}
+                        style={{ flex: 1, padding: '10px 4px', border: `2px solid ${form.enfants === n ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.enfants === n ? '#FDF8F0' : 'white', color: form.enfants === n ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.enfants === n ? 700 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {parseInt(form.enfants) > 0 && form.situation_civile && form.situation_civile !== 'celibataire' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={form.famille_recomposee}
+                      onChange={e => setForm(p => ({ ...p, famille_recomposee: e.target.checked }))}
+                      style={{ width: 16, height: 16, accentColor: '#1B2B4B' }} />
+                    <span style={{ color: '#6B7280', fontSize: 13 }}>Famille recomposée (enfants d'une union précédente)</span>
+                  </label>
+                )}
+              </div>
+            )}
+
+            {/* ── Étape 3 : Situation ── */}
+            {formStep === 3 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {/* Parents */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Vos parents sont-ils en vie ?</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[['oui','Oui'],['non','Non']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, parents_en_vie: val }))}
+                        style={{ flex: 1, padding: '11px', border: `2px solid ${form.parents_en_vie === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_en_vie === val ? '#F0F4FF' : 'white', color: form.parents_en_vie === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.parents_en_vie === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {form.parents_en_vie === 'oui' && (
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Ont-ils organisé leur transmission ?</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      {[['oui','Oui'],['en_partie','En partie'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
+                        <button key={val} onClick={() => setForm(p => ({ ...p, parents_orga: val }))}
+                          style={{ padding: '10px', border: `2px solid ${form.parents_orga === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_orga === val ? '#FDF8F0' : 'white', color: form.parents_orga === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.parents_orga === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Grands-parents */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Des grands-parents sont-ils en vie ?</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[['oui','Oui'],['non','Non']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, grands_parents_en_vie: val }))}
+                        style={{ flex: 1, padding: '11px', border: `2px solid ${form.grands_parents_en_vie === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.grands_parents_en_vie === val ? '#F0F4FF' : 'white', color: form.grands_parents_en_vie === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.grands_parents_en_vie === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Patrimoine */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Votre patrimoine personnel estimé</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, patrimoine: val }))}
+                        style={{ padding: '11px 16px', border: `2px solid ${form.patrimoine === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.patrimoine === val ? '#FDF8F0' : 'white', color: form.patrimoine === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.patrimoine === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Événement */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
+                    Un événement de vie en cours ou à venir ? <span style={{ color: '#A8A8B8' }}>(optionnel)</span>
+                  </label>
+                  <input type="text" value={form.evenement}
+                    onChange={e => setForm(p => ({ ...p, evenement: e.target.value }))}
+                    placeholder="Retraite, héritage, vente, achat, divorce, naissance…"
+                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                </div>
+              </div>
+            )}
+
+            {/* ── Étape 4 : Focus ── */}
+            {formStep === 4 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <p style={{ color: '#7A7A8C', fontSize: 14, margin: '0 0 8px', lineHeight: 1.6 }}>
+                  Pour un audit approfondi et pertinent, Nesso se concentre sur <strong style={{ color: '#1B2B4B' }}>un axe à la fois</strong>. Quelle est votre priorité ?
+                </p>
+                {[
+                  { val: 'A', icon: '↑', label: 'Ce que je vais recevoir', desc: 'Comprendre et organiser la transmission de mes parents et grands-parents de mon vivant.', show: form.parents_en_vie !== 'non' },
+                  { val: 'B', icon: '↓', label: 'Ce que je vais laisser', desc: form.situation_civile === 'celibataire' ? 'Organiser ma succession et protéger mes proches.' : 'Protéger mon conjoint et mes enfants en cas de décès ou d\'incapacité.', show: true },
+                  { val: 'C', icon: '◎', label: 'Réduire ma fiscalité', desc: 'Optimiser mes impôts cette année et structurer mon patrimoine sur le long terme.', show: true },
+                ].filter(o => o.show).map(({ val, icon, label, desc }) => (
+                  <div key={val} onClick={() => setForm(p => ({ ...p, focus: val }))}
+                    style={{ display: 'flex', gap: 16, alignItems: 'flex-start', border: `2px solid ${form.focus === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer', background: form.focus === val ? '#FDF8F0' : 'white', transition: 'all 0.15s' }}>
+                    <span style={{ fontSize: 22, color: '#C9A96E', flexShrink: 0, marginTop: 2 }}>{icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 15, margin: '0 0 5px' }}>{label}</p>
+                      <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0, lineHeight: 1.5 }}>{desc}</p>
+                    </div>
+                    {form.focus === val && <span style={{ color: '#C9A96E', fontSize: 20, flexShrink: 0, marginTop: 2 }}>✓</span>}
+                  </div>
+                ))}
+                <p style={{ color: '#A8A8B8', fontSize: 12, margin: '4px 0 0' }}>Vous pourrez explorer les autres axes avec Nesso+.</p>
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 28, alignItems: 'center' }}>
+              {formStep > 1 && (
+                <button onClick={() => setFormStep(s => s - 1)}
+                  style={{ padding: '11px 18px', border: '1px solid #E5E7EB', borderRadius: 9, background: 'white', color: '#6B7280', cursor: 'pointer', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }}>
+                  ← Retour
+                </button>
+              )}
+              {formStep < 4 ? (
+                <button onClick={() => canAdvance() && setFormStep(s => s + 1)} disabled={!canAdvance()}
+                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: canAdvance() ? '#1B2B4B' : '#E5E7EB', color: canAdvance() ? 'white' : '#A8A8B8', cursor: canAdvance() ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
+                  Suivant →
+                </button>
+              ) : (
+                <button onClick={() => form.focus && startWithForm(form)} disabled={!form.focus || loading}
+                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: form.focus && !loading ? '#C9A96E' : '#E5E7EB', color: form.focus && !loading ? 'white' : '#A8A8B8', cursor: form.focus && !loading ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
+                  {loading ? '⏳ Démarrage…' : 'Lancer mon audit →'}
+                </button>
+              )}
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: 14 }}>
+              <button onClick={start}
+                style={{ background: 'none', border: 'none', color: '#A8A8B8', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
+                Préférez-vous une conversation directe ?
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── BRANCHE 3 : CHAT ── */}
+        {auditPhase === 'chat' && (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 640 }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid #F5F0EA', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -765,7 +1116,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {messages.map((m, i) => (
+              {messages.filter(m => !m.hidden).map((m, i) => (
                 <div key={i} className="fade-in" style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', gap: 8 }}>
                   {m.role === 'assistant' && (
                     <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 2 }}>N</div>
