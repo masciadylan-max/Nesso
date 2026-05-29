@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ACTIFS } from './data.js';
 import { supabase } from './lib/supabase.js';
 import Navbar from './components/Navbar.jsx';
@@ -61,6 +61,42 @@ function SaveBanner({ onSave }) {
   );
 }
 
+// Badge utilisateur sur la page onboarding — dropdown avec "Reprendre" et "Déconnexion"
+function OnboardingUserBadge({ email, onLogout, onRetour }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  return (
+    <div ref={ref} style={{ position: 'fixed', top: 16, right: 16, zIndex: 150 }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1B2B4B', color: 'white', padding: '6px 12px 6px 6px', borderRadius: 24, border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', fontFamily: 'DM Sans, sans-serif' }}>
+        <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#C9A96E', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {email[0].toUpperCase()}
+        </span>
+        <span style={{ fontSize: 12, opacity: 0.85, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
+        <span style={{ fontSize: 9, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'white', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1px solid #E5E7EB', minWidth: 210, overflow: 'hidden' }}>
+          <button onClick={() => { setOpen(false); onRetour(); }}
+            style={{ width: '100%', padding: '13px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, fontWeight: 600, color: '#C9A96E', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
+            ✦ Reprendre mon tableau de bord
+          </button>
+          <div style={{ height: 1, background: '#F5F0EA', margin: '0 12px' }} />
+          <button onClick={() => { setOpen(false); onLogout(); }}
+            style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, color: '#E24B4A', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
+            → Se déconnecter
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Détection synchrone du mode "password recovery" depuis l'URL.
 // Supabase ajoute type=recovery dans le hash (#) ou query (?) du lien email.
 // On vérifie AVANT le mount React pour ne pas rater l'event s'il fire trop vite.
@@ -117,9 +153,15 @@ export default function App() {
       // INITIAL_SESSION : premier event au démarrage, fire toujours (avec ou sans session)
       if (event === 'INITIAL_SESSION') {
         setAuthUser(session?.user ?? null);
-        // Ne pas rediriger vers le dashboard si l'user est en train de faire un audit
-        if (session?.user && viewRef.current !== 'onboarding') {
-          try { await loadUserData(session.user.id); } catch (e) { console.error('loadUserData error:', e); }
+        if (session?.user) {
+          // Bloquer le chargement uniquement si l'user est EN TRAIN de faire un audit
+          // (= il est sur onboarding ET a déjà un profil local en mémoire).
+          // Si pas de profil local, il faut toujours tenter Supabase — sinon il est bloqué.
+          const hasLocalProfile = !!initialProfile; // capturé à l'init, stable
+          const auditEnCours = viewRef.current === 'onboarding' && hasLocalProfile;
+          if (!auditEnCours) {
+            try { await loadUserData(session.user.id); } catch (e) { console.error('loadUserData error:', e); }
+          }
         }
         return;
       }
@@ -269,21 +311,8 @@ export default function App() {
   if (view === 'onboarding') {
     return (
       <>
-        {/* Badge "Connecté" en haut à droite si l'user est authentifié */}
-        {authUser && (
-          <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 50, display: 'flex', alignItems: 'center', gap: 8, background: '#1B2B4B', color: 'white', padding: '6px 10px 6px 6px', borderRadius: 24, boxShadow: '0 2px 10px rgba(0,0,0,0.15)' }}>
-            <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#C9A96E', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {authUser.email[0].toUpperCase()}
-            </span>
-            <span style={{ fontSize: 12, opacity: 0.85, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              Connecté : {authUser.email}
-            </span>
-            <button onClick={handleLogout} title="Se déconnecter"
-              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'rgba(255,255,255,0.7)', borderRadius: 12, padding: '2px 8px', cursor: 'pointer', fontSize: 11, fontFamily: 'DM Sans, sans-serif' }}>
-              ↪
-            </button>
-          </div>
-        )}
+        {/* Badge connecté + actions (onboarding) */}
+        {authUser && <OnboardingUserBadge email={authUser.email} onLogout={handleLogout} onRetour={async () => { await loadUserData(authUser.id); }} />}
 
         <Onboarding
           onComplete={handleComplete}
