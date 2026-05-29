@@ -84,7 +84,11 @@ export default function App() {
   // si l'user est en train de faire un audit → ne pas rediriger vers le dashboard.
   const viewRef = useRef(initialProfile ? 'dashboard' : 'onboarding');
   const _setView = (v) => { viewRef.current = v; setView(v); };
+  // Ref pour passwordRecovery — même raison que viewRef : évite les stale closures
+  // dans le callback onAuthStateChange qui est une closure capturée à l'init.
+  const passwordRecoveryRef = useRef(initialRecovery);
   const [passwordRecovery, setPasswordRecovery] = useState(initialRecovery);
+  const _setPasswordRecovery = (v) => { passwordRecoveryRef.current = v; setPasswordRecovery(v); };
   const [pov, setPov]                 = useState(initialProfile ? 'user' : 'user');
   const [actifs, setActifs]           = useState(initialActifs || ACTIFS);
   const [userProfile, setUserProfile] = useState(initialProfile);
@@ -123,15 +127,17 @@ export default function App() {
       // PASSWORD_RECOVERY : user a cliqué sur le lien de réinitialisation reçu par email
       if (event === 'PASSWORD_RECOVERY') {
         setAuthUser(session?.user ?? null);
-        setPasswordRecovery(true);
+        _setPasswordRecovery(true);
         setShowAuth(true);
         return;
       }
 
       setAuthUser(session?.user ?? null);
       if (session?.user && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
-        // Ne pas interrompre un audit en cours
-        if (viewRef.current === 'onboarding') return;
+        // Ne pas interrompre un audit en cours — SAUF si on vient d'un reset de mot de passe
+        // (dans ce cas, l'user est sur 'onboarding' mais a un compte existant à charger)
+        const isAuditInProgress = viewRef.current === 'onboarding' && !passwordRecoveryRef.current;
+        if (isAuditInProgress) return;
         setShowAuth(false);
         try {
           const { data } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
@@ -284,13 +290,14 @@ export default function App() {
           apiKey={apiKey}
           onApiKey={() => setShowApiKey(true)}
           onLogin={() => setShowAuth(true)}
+          onRetourDashboard={authUser && userProfile ? async () => { await loadUserData(authUser.id); } : null}
         />
         <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
         {showAuth && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
             onClick={e => { if (e.target === e.currentTarget) setShowAuth(false); }}>
             <div style={{ width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', borderRadius: 16 }}>
-              <Auth embedded onClose={() => { setShowAuth(false); setPasswordRecovery(false); }} recoveryMode={passwordRecovery} />
+              <Auth embedded onClose={() => { setShowAuth(false); _setPasswordRecovery(false); }} recoveryMode={passwordRecovery} />
             </div>
           </div>
         )}
@@ -350,7 +357,7 @@ export default function App() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
           onClick={e => { if (e.target === e.currentTarget) setShowAuth(false); }}>
           <div style={{ width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto', borderRadius: 16 }}>
-            <Auth embedded onClose={() => { setShowAuth(false); setPasswordRecovery(false); }} recoveryMode={passwordRecovery} />
+            <Auth embedded onClose={() => { setShowAuth(false); _setPasswordRecovery(false); }} recoveryMode={passwordRecovery} />
           </div>
         </div>
       )}

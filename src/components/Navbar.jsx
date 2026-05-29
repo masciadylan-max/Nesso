@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react';
 import { FAMILLE } from '../data.js';
 
 const NAV_ITEMS_BASE = [
@@ -47,6 +48,15 @@ export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, 
     ? [...NAV_ITEMS_BASE, { id: 'compte', label: 'Mon compte', icon: '◐' }]
     : NAV_ITEMS_BASE;
   const povOptions = buildPovOptions(userProfile);
+
+  // Dropdown menu utilisateur
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  useEffect(() => {
+    const handler = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
   return (
     <>
       {/* Desktop */}
@@ -82,13 +92,29 @@ export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, 
             </select>
 <button onClick={onApiKey} title="Configurer la clé API" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>⚙</button>
             {userEmail && (
-              <button onClick={() => setView('compte')} title="Mon compte"
-                style={{ display: 'flex', alignItems: 'center', gap: 7, background: view === 'compte' ? 'rgba(201,169,110,0.18)' : 'rgba(255,255,255,0.07)', border: '1px solid rgba(201,169,110,0.25)', color: '#C9A96E', borderRadius: 20, padding: '5px 12px 5px 5px', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', borderLeft: '1px solid rgba(255,255,255,0.1)' }}>
-                <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#C9A96E', color: 'white', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {userEmail[0].toUpperCase()}
-                </span>
-                <span style={{ fontSize: 12, maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</span>
-              </button>
+              <div ref={dropdownRef} style={{ position: 'relative' }}>
+                <button onClick={() => setDropdownOpen(o => !o)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 7, background: dropdownOpen ? 'rgba(201,169,110,0.18)' : 'rgba(255,255,255,0.07)', border: '1px solid rgba(201,169,110,0.25)', color: '#C9A96E', borderRadius: 20, padding: '5px 10px 5px 5px', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                  <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#C9A96E', color: 'white', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {userEmail[0].toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 12, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userEmail}</span>
+                  <span style={{ fontSize: 9, opacity: 0.7, marginLeft: 2 }}>{dropdownOpen ? '▲' : '▼'}</span>
+                </button>
+                {dropdownOpen && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'white', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1px solid #E5E7EB', minWidth: 180, overflow: 'hidden', zIndex: 200 }}>
+                    <button onClick={() => { setView('compte'); setDropdownOpen(false); }}
+                      style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, color: '#1B2B4B', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 15 }}>◐</span> Mon compte
+                    </button>
+                    <div style={{ height: 1, background: '#F5F0EA', margin: '0 12px' }} />
+                    <button onClick={() => { setDropdownOpen(false); onLogout?.(); }}
+                      style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, color: '#E24B4A', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ fontSize: 15 }}>→</span> Se déconnecter
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -391,7 +391,7 @@ const renderText = (text) => {
   );
 };
 
-export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
+export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRetourDashboard }) {
   // auditPhase : 'landing' | 'form' | 'chat'
   const [auditPhase, setAuditPhase] = useState('landing');
   const [form, setForm]             = useState(FORM_INIT);
@@ -716,14 +716,23 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin }) {
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+              {/* ── CTA prioritaire : reprendre le tableau existant (user authentifié) ── */}
+              {onRetourDashboard && (
+                <button onClick={onRetourDashboard} disabled={loading}
+                  style={{ width: '100%', padding: '16px', fontSize: 16, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                  {loading ? '⏳ Chargement…' : '✦ Reprendre mon tableau de bord →'}
+                </button>
+              )}
+
               {hasSavedConversation && !isDemoMode && (
                 <>
                   <button onClick={handleContinuerConversation} disabled={loading}
-                    style={{ width: '100%', padding: '14px', fontSize: 15, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
-                    ✦ Continuer ma conversation →
+                    style={{ width: '100%', padding: '13px', fontSize: 14, background: onRetourDashboard ? 'white' : '#C9A96E', color: onRetourDashboard ? '#1B2B4B' : 'white', border: onRetourDashboard ? '1px solid #E5E7EB' : 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
+                    ↺ Continuer ma conversation en cours →
                   </button>
                   <button onClick={handleReprendreConversation} disabled={loading}
-                    style={{ width: '100%', padding: '11px', fontSize: 14, background: 'white', color: '#1B2B4B', border: '1px solid #E5E7EB', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                    style={{ width: '100%', padding: '11px', fontSize: 13, background: 'white', color: '#1B2B4B', border: '1px solid #E5E7EB', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
                     {loading ? '⏳ Génération...' : '📊 Générer mon tableau depuis la dernière conversation'}
                   </button>
                 </>
