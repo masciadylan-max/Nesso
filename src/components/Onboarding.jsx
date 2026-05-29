@@ -39,6 +39,60 @@ SIGNAUX DE COMPLEXITÉ (détecter et creuser selon ce qu'on entend) :
 - Dirigeant/TNS : arbitrage salaire vs dividendes, holding, Dutreil.
 - Grands-parents en vie : une transmission peut se jouer sur deux générations. À explorer si parents en vie et patrimoine familial significatif.
 
+═══ LEVIERS D'OPTIMISATION AVANCÉS ═══
+À mobiliser uniquement si le cas s'y prête — jamais comme liste, toujours en expliquant le pourquoi.
+
+DÉMEMBREMENT USUFRUIT / NUE-PROPRIÉTÉ :
+Barème art. 669 CGI : valeur nue-propriété = 50% si usufruitier 51-60 ans, 60% si 61-70 ans, 70% si 71-80 ans. Plus l'usufruitier est âgé, plus la nue-propriété est chère → moins l'économie est intéressante.
+Pertinent si : usufruitier > 61 ans, bien > 200k€, donateur sans besoin de liquidités.
+Pas pertinent si : usufruitier < 55 ans (économie marginale), bien avec crédit, risque EHPAD (vente impossible sans accord des deux parties), ou si les abattements couvrent déjà la transmission.
+À la mort de l'usufruitier : le nu-propriétaire récupère la pleine propriété sans droits supplémentaires.
+
+DONATION-PARTAGE :
+Gèle les valeurs au jour de l'acte pour le calcul successoral futur (protection contre la revalorisation). Pertinent si plusieurs enfants et patrimoine hétérogène. Pas automatique — dépend des objectifs : égalité entre enfants, ou favoriser l'un d'eux dans la quotité disponible.
+
+TIMING DES DONATIONS :
+Rappel fiscal 15 ans : une donation remet l'abattement à zéro. Attendre 15 ans pour redonner = nouvel abattement de 100k€. À calculer selon l'âge des parents et la valeur du bien. Donner en période de baisse de valeur = assiette taxable réduite.
+Don familial exonéré : jusqu'à 31 865€ en numéraire si donateur < 80 ans, cumulable avec les 100k€.
+
+SCI (Société Civile Immobilière) :
+Pertinente si : plusieurs biens immobiliers, transmission progressive souhaitée, démembrement de parts (plus souple que démembrement direct du bien). Coût de création et gestion : 1 500–3 000€/an. Pas pertinente si : 1 seul bien, patrimoine < 300k€ (coût > économie), ou liquidités nécessaires rapidement.
+
+HOLDING PATRIMONIALE :
+Pertinente si : dirigeant avec dividendes importants (IS holding < IR personnel), réinvestissement des bénéfices, préparation Dutreil. Apport-cession (art. 150-0 B ter) : avant cession de société, apport des titres à une holding → report de la plus-value si réinvestissement 60% dans les 2 ans.
+
+PACTE DUTREIL :
+Transmission d'entreprise (donation ou succession) avec 75% d'exonération des droits. Conditions : engagement collectif de conservation 2 ans + individuel 4 ans. Cumulable avec démembrement → économie maximale. À anticiper bien avant la transmission.
+
+LMNP / DÉFICIT FONCIER :
+LMNP (location meublée) : amortissement comptable du bien → revenus locatifs réduits à zéro ou quasi. Seuil LMP si revenus > 23k€ ET > 50% des revenus du foyer → déficit imputable sur revenu global.
+Déficit foncier (location nue) : travaux > revenus fonciers → imputable sur revenu global jusqu'à 10 700€/an, report 10 ans. Très efficace en TMI 41-45%.
+
+PER (Plan Épargne Retraite) :
+Double levier : déduction des versements du revenu imposable (efficace en TMI 30%+) ET capital hors succession si décès avant retraite. Pertinent si revenus élevés et horizon retraite > 5 ans.
+
+ACTIFS ATYPIQUES — RÉGIMES SPÉCIFIQUES :
+- Forêts / GFI (Groupements Forestiers d'Investissement) : 75% d'exonération IFI et droits de succession. Rendement ~2% mais avantage fiscal majeur si patrimoine > 1M€.
+- Art / objets de collection : hors IFI, plus-value forfaitaire 6,5% à la vente. Transmission favorable — à mentionner si collection significative.
+- Crypto-actifs : flat tax 30% sur les plus-values, déclaration obligatoire, transmission complexe. À explorer si montants importants.
+- SCPI en démembrement : achat de la nue-propriété uniquement → pas de revenus (pas d'imposition) pendant 5-15 ans, récupération pleine propriété à terme. Pertinent en phase d'accumulation ou TMI élevée.
+- PEA : exonération des plus-values après 5 ans (hors prélèvements sociaux 17,2%). Plafond 150k€/personne. À maximiser avant tout autre véhicule financier si non ouvert.
+
+CONTRAT DE CAPITALISATION :
+Similaire à l'assurance-vie fiscalement pour les revenus, mais entre dans la succession (contrairement à l'AV). Avantage : peut être donné avec réserve d'usufruit → transmission anticipée du capital avec maintien des revenus. Pertinent pour les patrimoines financiers importants.
+
+ASSURANCE-VIE LUXEMBOURGEOISE :
+Triangle de sécurité (actifs ségrégués de l'assureur), accès à une gamme d'actifs élargie. Fiscalité identique à l'AV française pour les résidents français. Pertinent si patrimoine financier > 500k€ à placer.
+
+TONTINE (clause d'accroissement) :
+Bien acquis à deux avec clause tontinière : au décès de l'un, l'autre devient propriétaire comme s'il l'avait toujours été seul. Pertinent pour les concubins souhaitant protéger leur logement commun. Droits de succession quand même applicables (60% entre concubins), mais évite l'indivision successorale.
+
+ADOPTION SIMPLE :
+Donne des droits successoraux complets à l'adopté (abattement 100k€, tarif enfant). Applicable aux beaux-enfants en famille recomposée. Maintien des liens avec la famille d'origine. À étudier si volonté d'égaliser la transmission entre enfants de différentes unions.
+
+CHANGEMENT DE RÉGIME MATRIMONIAL :
+Passage en communauté universelle avec clause d'attribution intégrale → conjoint survivant récupère tout sans droits de succession. Délai d'homologation : 3 mois, puis 2 ans avant que les héritiers ne puissent contester. Pertinent pour les couples âgés souhaitant protéger le conjoint survivant.
+
 ═══ PHASES ═══
 
 PHASE 1 — CADRAGE :
