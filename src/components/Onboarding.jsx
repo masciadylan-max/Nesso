@@ -718,18 +718,10 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-              {/* ── CTA prioritaire : reprendre le tableau existant (user authentifié) ── */}
-              {onRetourDashboard && (
-                <button onClick={onRetourDashboard} disabled={loading}
-                  style={{ width: '100%', padding: '16px', fontSize: 16, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  {loading ? '⏳ Chargement…' : '✦ Reprendre mon tableau de bord →'}
-                </button>
-              )}
-
               {hasSavedConversation && !isDemoMode && (
                 <>
                   <button onClick={handleContinuerConversation} disabled={loading}
-                    style={{ width: '100%', padding: '13px', fontSize: 14, background: onRetourDashboard ? 'white' : '#C9A96E', color: onRetourDashboard ? '#1B2B4B' : 'white', border: onRetourDashboard ? '1px solid #E5E7EB' : 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
+                    style={{ width: '100%', padding: '13px', fontSize: 14, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
                     ↺ Continuer ma conversation en cours →
                   </button>
                   <button onClick={handleReprendreConversation} disabled={loading}
@@ -741,6 +733,13 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
               <button className="btn-navy" onClick={() => { setForm(FORM_INIT); setFormStep(1); setAuditPhase('form'); }} style={{ width: '100%', padding: '14px', fontSize: 15 }}>
                 {isDemoMode ? 'Démarrer la démo →' : hasSavedConversation ? 'Recommencer un nouvel audit →' : 'Commencer l\'audit →'}
               </button>
+              {/* ── Reprendre le tableau existant (user authentifié avec données sauvegardées) ── */}
+              {onRetourDashboard && (
+                <button onClick={onRetourDashboard} disabled={loading}
+                  style={{ width: '100%', padding: '13px', fontSize: 14, background: 'white', color: '#1B2B4B', border: '1px solid #E5E7EB', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {loading ? '⏳ Chargement…' : '✦ Reprendre mon tableau de bord →'}
+                </button>
+              )}
               <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'DM Sans, sans-serif' }}>
                 Voir l'exemple sans remplir →
               </button>

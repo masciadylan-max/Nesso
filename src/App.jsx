@@ -81,12 +81,7 @@ function OnboardingUserBadge({ email, onLogout, onRetour }) {
         <span style={{ fontSize: 9, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'white', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1px solid #E5E7EB', minWidth: 210, overflow: 'hidden' }}>
-          <button onClick={() => { setOpen(false); onRetour(); }}
-            style={{ width: '100%', padding: '13px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, fontWeight: 600, color: '#C9A96E', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
-            ✦ Reprendre mon tableau de bord
-          </button>
-          <div style={{ height: 1, background: '#F5F0EA', margin: '0 12px' }} />
+        <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'white', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1px solid #E5E7EB', minWidth: 180, overflow: 'hidden' }}>
           <button onClick={() => { setOpen(false); onLogout(); }}
             style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, color: '#E24B4A', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
             → Se déconnecter
