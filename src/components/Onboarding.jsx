@@ -362,7 +362,8 @@ const extractUserData = async (history) => {
         max_tokens: 1200, // Augmenté pour éviter les troncatures du JSON
         system: 'Tu es un extracteur de données JSON. Réponds UNIQUEMENT avec le JSON demandé, sans markdown, sans texte avant ou après.',
         messages: [
-          ...history.slice(-20),
+          // Strip les propriétés internes (hidden, etc.) — l'API n'accepte que role + content
+          ...history.slice(-20).map(m => ({ role: m.role, content: m.content })),
           { role: 'user', content: EXTRACTION_PROMPT }
         ]
       })

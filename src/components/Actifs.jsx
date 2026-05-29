@@ -73,7 +73,7 @@ export default function Actifs({ pov, actifs, setActifs, userProfile }) {
             <span style={{ fontSize: 22 }}>{CAT_ICONS[cat]}</span>
             <p style={{ color: '#7A7A8C', fontSize: 12, marginTop: 8, textTransform: 'capitalize' }}>{cat}</p>
             <p style={{ fontWeight: 700, color: '#1B2B4B', fontSize: 21, margin: '2px 0' }}>{euro(totals[cat])}</p>
-            <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>{actifs.filter(a => a.categorie === cat).length} actif(s)</p>
+            <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>{povActifs.filter(a => a.categorie === cat).length} actif(s)</p>
           </div>
         ))}
       </div>

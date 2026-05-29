@@ -244,7 +244,9 @@ export default function App() {
       ? (userData.actifs || []).filter(a => a.valeur > 0).map((a, i) => ({
           id: 1000 + i, nom: a.nom, categorie: a.categorie || 'financier',
           valeur: a.valeur, type: a.type || 'Non précisé', pays: a.pays || 'France',
-          proprietaires: ['user'], credit: false, note: null, beneficiaire: null,
+          // Préserver les proprietaires extraits par Haiku (user/conjoint/enfant_N)
+          proprietaires: Array.isArray(a.proprietaires) && a.proprietaires.length > 0 ? a.proprietaires : ['user'],
+          credit: false, note: null, beneficiaire: null,
         }))
       : ACTIFS;
     const newProfile = userData || null;
