@@ -34,10 +34,20 @@ OUTILS CLÉS (à mobiliser si pertinent, jamais énumérés comme liste) :
 
 SIGNAUX DE COMPLEXITÉ (détecter et creuser selon ce qu'on entend) :
 - Famille recomposée : tension potentielle entre protéger le conjoint actuel et les enfants d'unions précédentes. Ne pas supposer l'objectif — demander.
-- Bien étranger UE : règlement UE 650/2012. Hors UE : convention bilatérale.
+- Bien étranger UE : règlement 650/2012 applicable, certificat successoral européen possible.
+- Bien étranger hors UE (USA, Maroc, Suisse, Liban…) : règlement 650/2012 inapplicable, convention bilatérale spécifique à identifier.
+- Immeuble étranger : suit souvent la loi du pays où il est situé (lex situs), même avec convention.
+- Nationalité américaine : estate tax mondiale possible même résident en France, convention France-USA complexe — signal d'alerte fort.
+- Double imposition toujours possible → vérifier convention bilatérale et résidence fiscale exacte.
 - IFI : patrimoine immobilier net > 1 300 000€. Abattement 30% sur résidence principale.
 - Dirigeant/TNS : arbitrage salaire vs dividendes, holding, Dutreil.
 - Grands-parents en vie : une transmission peut se jouer sur deux générations. À explorer si parents en vie et patrimoine familial significatif.
+- AV sans bénéficiaire désigné ou clause standard non mise à jour après divorce/remariage → perd son avantage hors succession.
+- Donations antérieures non formalisées (virement, aide à l'achat, paiement études) → requalifiables en donation rapportable à la succession.
+- Indivision sans convention → tout indivisaire peut forcer la vente (art. 815 CC).
+- Testament olographe non déposé au FCDDV → risque de perte ou contestation.
+- Famille recomposée + enfants non communs → conjoint survivant limité à l'usufruit du quart seulement (art. 757 CC).
+- Âge > 67 ans → versements AV après 70 ans perdent l'abattement 152 500€ → urgence à alimenter avant.
 
 ═══ LEVIERS D'OPTIMISATION AVANCÉS ═══
 À mobiliser uniquement si le cas s'y prête — jamais comme liste, toujours en expliquant le pourquoi.
