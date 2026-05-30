@@ -300,11 +300,11 @@ const FORM_INIT = {
   situation_civile: '', regime: 'communaute', conjoint_prenom: '', conjoint_age: '',
   enfants: '0', enfants_data: [], famille_recomposee: false,
   parents_en_vie: '',      // 'les_deux' | 'pere' | 'mere' | 'non'
-  parents_age: '', parents_orga: '',
+  pere_age: '', mere_age: '', parents_orga: '',
   gp_maternels: '',        // 'les_deux' | 'un' | 'non'
-  gp_maternels_age: '',
+  gp_maternels_age: '', gp_maternels_age2: '',
   gp_paternels: '',        // 'les_deux' | 'un' | 'non'
-  gp_paternels_age: '',
+  gp_paternels_age: '', gp_paternels_age2: '',
   patrimoine: '', patrimoine_detail: {}, evenement: '', focus: '',
   // Focus A
   parents_patrimoine: '', parents_compo: [], gp_patrimoine: '', donations_recues: '',
@@ -345,13 +345,13 @@ const buildContextMessage = (f) => {
       ? 'Enfants : Aucun'
       : `Enfants : ${nbEnfants}${f.famille_recomposee ? ' — famille recomposée' : ''}${enfantsDesc ? ` — ${enfantsDesc}` : ''}`,
     f.parents_en_vie
-      ? `Parents en vie : ${{ les_deux: 'Les deux', pere: 'Père uniquement', mere: 'Mère uniquement', non: 'Aucun' }[f.parents_en_vie] || f.parents_en_vie}${f.parents_en_vie !== 'non' && f.parents_age ? ` — âge estimé : ${f.parents_age}` : ''}${f.parents_en_vie !== 'non' && orgaLabel ? ` — transmission organisée : ${orgaLabel}` : ''}`
+      ? `Parents en vie : ${{ les_deux: 'Les deux', pere: 'Père uniquement', mere: 'Mère uniquement', non: 'Aucun' }[f.parents_en_vie] || f.parents_en_vie}${f.parents_en_vie !== 'non' && (f.pere_age || f.mere_age) ? ` — ${[f.parents_en_vie !== 'mere' && f.pere_age ? `père ${f.pere_age} ans` : null, f.parents_en_vie !== 'pere' && f.mere_age ? `mère ${f.mere_age} ans` : null].filter(Boolean).join(', ')}` : ''}${f.parents_en_vie !== 'non' && orgaLabel ? ` — transmission organisée : ${orgaLabel}` : ''}`
       : null,
     f.gp_maternels
-      ? `Grands-parents maternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_maternels]}${f.gp_maternels !== 'non' && f.gp_maternels_age ? ` — âge estimé : ${f.gp_maternels_age}` : ''}`
+      ? `Grands-parents maternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_maternels]}${f.gp_maternels !== 'non' && f.gp_maternels_age ? ` — ${f.gp_maternels_age} ans${f.gp_maternels === 'les_deux' && f.gp_maternels_age2 ? ` / ${f.gp_maternels_age2} ans` : ''}` : ''}`
       : null,
     f.gp_paternels
-      ? `Grands-parents paternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_paternels]}${f.gp_paternels !== 'non' && f.gp_paternels_age ? ` — âge estimé : ${f.gp_paternels_age}` : ''}`
+      ? `Grands-parents paternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_paternels]}${f.gp_paternels !== 'non' && f.gp_paternels_age ? ` — ${f.gp_paternels_age} ans${f.gp_paternels === 'les_deux' && f.gp_paternels_age2 ? ` / ${f.gp_paternels_age2} ans` : ''}` : ''}`
       : null,
     patriLabel ? `Patrimoine estimé${(f.situation_civile && f.situation_civile !== 'celibataire' && f.conjoint_prenom) ? ' du foyer' : ' personnel'} : ${patriLabel}` : null,
     ...(Object.entries(f.patrimoine_detail || {}).map(([key, v]) => {
@@ -1127,16 +1127,25 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                 </div>
                 {form.parents_en_vie && form.parents_en_vie !== 'non' && (
                   <>
-                    <div>
-                      <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Âge <span style={{ color: '#A8A8B8' }}>(approximatif)</span></label>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {[['<60','< 60'],['60-70','60–70'],['70-80','70–80'],['80+','> 80']].map(([val, lbl]) => (
-                          <button key={val} onClick={() => setForm(p => ({ ...p, parents_age: val }))}
-                            style={{ flex: 1, padding: '9px 4px', border: `2px solid ${form.parents_age === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_age === val ? '#F0F4FF' : 'white', color: form.parents_age === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: form.parents_age === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
-                            {lbl}
-                          </button>
-                        ))}
-                      </div>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {(form.parents_en_vie === 'les_deux' || form.parents_en_vie === 'pere') && (
+                        <div style={{ flex: 1 }}>
+                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 6 }}>Âge du père</label>
+                          <input type="number" min="40" max="110" placeholder="ex. 72"
+                            value={form.pere_age}
+                            onChange={e => setForm(p => ({ ...p, pere_age: e.target.value }))}
+                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                        </div>
+                      )}
+                      {(form.parents_en_vie === 'les_deux' || form.parents_en_vie === 'mere') && (
+                        <div style={{ flex: 1 }}>
+                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 6 }}>Âge de la mère</label>
+                          <input type="number" min="40" max="110" placeholder="ex. 68"
+                            value={form.mere_age}
+                            onChange={e => setForm(p => ({ ...p, mere_age: e.target.value }))}
+                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Ont-ils organisé leur transmission ?</label>
@@ -1152,7 +1161,10 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                   </>
                 )}
                 {/* Grands-parents — deux lignes séparées */}
-                {[['gp_maternels','gp_maternels_age','Grands-parents maternels'],['gp_paternels','gp_paternels_age','Grands-parents paternels']].map(([field, ageField, label]) => (
+                {[
+                  ['gp_maternels','gp_maternels_age','gp_maternels_age2','Grands-parents maternels'],
+                  ['gp_paternels','gp_paternels_age','gp_paternels_age2','Grands-parents paternels'],
+                ].map(([field, age1Field, age2Field, label]) => (
                   <div key={field}>
                     <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>{label}</label>
                     <div style={{ display: 'flex', gap: 8, marginBottom: form[field] && form[field] !== 'non' ? 10 : 0 }}>
@@ -1164,13 +1176,25 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                       ))}
                     </div>
                     {form[field] && form[field] !== 'non' && (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {[['<70','< 70'],['70-80','70–80'],['80+','> 80']].map(([val, lbl]) => (
-                          <button key={val} onClick={() => setForm(p => ({ ...p, [ageField]: val }))}
-                            style={{ flex: 1, padding: '8px 4px', border: `2px solid ${form[ageField] === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form[ageField] === val ? '#FDF8F0' : 'white', color: form[ageField] === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: form[ageField] === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
-                            {lbl} ans
-                          </button>
-                        ))}
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>
+                            {form[field] === 'les_deux' ? '1er grand-parent' : 'Âge'}
+                          </label>
+                          <input type="number" min="50" max="115" placeholder="ex. 78"
+                            value={form[age1Field]}
+                            onChange={e => setForm(p => ({ ...p, [age1Field]: e.target.value }))}
+                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                        </div>
+                        {form[field] === 'les_deux' && (
+                          <div style={{ flex: 1 }}>
+                            <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>2e grand-parent</label>
+                            <input type="number" min="50" max="115" placeholder="ex. 75"
+                              value={form[age2Field]}
+                              onChange={e => setForm(p => ({ ...p, [age2Field]: e.target.value }))}
+                              style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
