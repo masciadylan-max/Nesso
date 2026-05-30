@@ -363,7 +363,7 @@ const buildContextMessage = (f) => {
     // Focus A
     f.focus === 'A' && f.parents_patrimoine ? `Patrimoine parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.parents_patrimoine] || f.parents_patrimoine}` : null,
     f.focus === 'A' && f.parents_compo?.length > 0 ? `Composition patrimoine parents : ${f.parents_compo.join(', ')}` : null,
-    f.focus === 'A' && f.grands_parents_en_vie === 'oui' && f.gp_patrimoine ? `Patrimoine grands-parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.gp_patrimoine] || f.gp_patrimoine}` : null,
+    f.focus === 'A' && f.gp_patrimoine ? `Patrimoine grands-parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.gp_patrimoine] || f.gp_patrimoine}` : null,
     f.focus === 'A' && f.donations_recues ? `Donations déjà reçues : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.donations_recues] || f.donations_recues}` : null,
     f.focus === 'A' && f.oncles_tantes_maternels ? `Oncles/tantes côté maternel : ${f.oncles_tantes_maternels}` : null,
     f.focus === 'A' && f.oncles_tantes_paternels ? `Oncles/tantes côté paternel : ${f.oncles_tantes_paternels}` : null,
@@ -1294,7 +1294,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                   </div>
                 </div>
                 {/* Patrimoine GP si en vie */}
-                {form.grands_parents_en_vie === 'oui' && (
+                {((form.gp_maternels && form.gp_maternels !== 'non') || (form.gp_paternels && form.gp_paternels !== 'non')) && (
                   <div>
                     <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Patrimoine estimé de vos grands-parents</label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
