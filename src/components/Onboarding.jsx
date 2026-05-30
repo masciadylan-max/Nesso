@@ -151,7 +151,7 @@ Terminer par une question sur leur priorité personnelle — pas sur une contrai
 Ne jamais mentionner tarif ou Nesso+ ici.
 
 PHASE 3 — APPROFONDISSEMENT :
-Adapter le fil de la conversation à l'axe choisi. Une seule question à la fois. S'adapter à ce qu'on entend. Si une réponse ouvre une piste importante, la suivre. Si quelque chose est déjà su ou réglé, ne pas redemander.
+Adapter le fil de la conversation à l'axe choisi. Conduire comme un vrai conseiller : regrouper les questions liées quand c'est naturel, ne pas multiplier les allers-retours inutiles. S'adapter à ce qu'on entend. Si une réponse ouvre une piste importante, la suivre. Si quelque chose est déjà su ou réglé, ne pas redemander.
 L'objectif : comprendre les actifs en jeu (nature, valeur, localisation), ce qui est déjà en place, les objectifs prioritaires. Dès qu'on a assez pour identifier 1-2 leviers, les énoncer clairement et avancer. Arriver à la situation personnelle de l'utilisateur avant de conclure — son patrimoine de base, sa situation civile, ses objectifs propres.
 
 FOCUS A — TRANSMISSION VERTICALE (ce qu'ils vont recevoir) :
@@ -298,8 +298,9 @@ Mieux vaut une estimation imparfaite qu'un champ vide. Tranche toujours.`;
 const FORM_INIT = {
   prenom: '', age: '', profession: 'salarié', niveau: 'intermediaire',
   situation_civile: '', regime: 'communaute', conjoint_prenom: '',
-  enfants: '0', famille_recomposee: false,
-  parents_en_vie: '', parents_orga: '', grands_parents_en_vie: '',
+  enfants: '0', enfants_data: [], famille_recomposee: false,
+  parents_en_vie: '', parents_age: '', parents_orga: '',
+  grands_parents_en_vie: '', gp_age: '',
   patrimoine: '', evenement: '', focus: '',
 };
 
@@ -312,6 +313,12 @@ const buildContextMessage = (f) => {
   const orgaLabel   = { oui: 'Oui', en_partie: 'En partie', non: 'Non', sais_pas: 'Je ne sais pas' }[f.parents_orga] || '';
   const nbEnfants   = parseInt(f.enfants) || 0;
 
+  // Enfants : liste prénoms + âges si renseignés
+  const enfantsDetail = (f.enfants_data || []).filter(e => e.prenom || e.age);
+  const enfantsDesc = enfantsDetail.length > 0
+    ? enfantsDetail.map((e, i) => `${e.prenom || `Enfant ${i+1}`}${e.age ? ` (${e.age} ans)` : ''}`).join(', ')
+    : null;
+
   const lines = [
     'DONNÉES DE CADRAGE — FORMULAIRE NESSO',
     f.prenom
@@ -323,14 +330,16 @@ const buildContextMessage = (f) => {
       : null,
     f.situation_civile && f.situation_civile !== 'celibataire' && f.conjoint_prenom
       ? `Conjoint(e) / partenaire : ${f.conjoint_prenom}` : null,
-    `Enfants : ${nbEnfants === 0 ? 'Aucun' : nbEnfants}${f.famille_recomposee ? ' — famille recomposée' : ''}`,
+    nbEnfants === 0
+      ? 'Enfants : Aucun'
+      : `Enfants : ${nbEnfants}${f.famille_recomposee ? ' — famille recomposée' : ''}${enfantsDesc ? ` — ${enfantsDesc}` : ''}`,
     f.parents_en_vie
-      ? `Parents en vie : ${f.parents_en_vie === 'oui' ? 'Oui' : 'Non'}${f.parents_en_vie === 'oui' && orgaLabel ? ` — transmission organisée : ${orgaLabel}` : ''}`
+      ? `Parents en vie : ${f.parents_en_vie === 'oui' ? 'Oui' : 'Non'}${f.parents_en_vie === 'oui' && f.parents_age ? ` — âge estimé : ${f.parents_age}` : ''}${f.parents_en_vie === 'oui' && orgaLabel ? ` — transmission organisée : ${orgaLabel}` : ''}`
       : null,
     f.grands_parents_en_vie
-      ? `Grands-parents en vie : ${f.grands_parents_en_vie === 'oui' ? 'Oui' : 'Non'}`
+      ? `Grands-parents en vie : ${f.grands_parents_en_vie === 'oui' ? 'Oui' : 'Non'}${f.grands_parents_en_vie === 'oui' && f.gp_age ? ` — âge estimé : ${f.gp_age}` : ''}`
       : null,
-    patriLabel ? `Patrimoine personnel estimé : ${patriLabel}` : null,
+    patriLabel ? `Patrimoine estimé (tous actifs) : ${patriLabel}` : null,
     f.evenement?.trim() ? `Événement de vie : ${f.evenement}` : null,
     focusLabel ? `Focus choisi : ${focusLabel}` : null,
   ].filter(Boolean);
@@ -1030,6 +1039,23 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                     ))}
                   </div>
                 </div>
+                {parseInt(form.enfants) > 0 && (
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Prénoms et âges des enfants <span style={{ color: '#A8A8B8' }}>(optionnel)</span></label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {Array.from({ length: Math.min(form.enfants === '4+' ? 4 : parseInt(form.enfants), 4) }).map((_, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 8 }}>
+                          <input type="text" placeholder={`Enfant ${i + 1} — prénom`} value={form.enfants_data[i]?.prenom || ''}
+                            onChange={e => { const d = [...(form.enfants_data || [])]; d[i] = { ...(d[i] || {}), prenom: e.target.value }; setForm(p => ({ ...p, enfants_data: d })); }}
+                            style={{ flex: 2, border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }} />
+                          <input type="number" placeholder="Âge" min="0" max="60" value={form.enfants_data[i]?.age || ''}
+                            onChange={e => { const d = [...(form.enfants_data || [])]; d[i] = { ...(d[i] || {}), age: e.target.value }; setForm(p => ({ ...p, enfants_data: d })); }}
+                            style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {parseInt(form.enfants) > 0 && form.situation_civile && form.situation_civile !== 'celibataire' && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                     <input type="checkbox" checked={form.famille_recomposee}
@@ -1057,17 +1083,30 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                   </div>
                 </div>
                 {form.parents_en_vie === 'oui' && (
-                  <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Ont-ils organisé leur transmission ?</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      {[['oui','Oui'],['en_partie','En partie'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
-                        <button key={val} onClick={() => setForm(p => ({ ...p, parents_orga: val }))}
-                          style={{ padding: '10px', border: `2px solid ${form.parents_orga === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_orga === val ? '#FDF8F0' : 'white', color: form.parents_orga === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.parents_orga === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
-                          {lbl}
-                        </button>
-                      ))}
+                  <>
+                    <div>
+                      <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Âge de vos parents <span style={{ color: '#A8A8B8' }}>(approximatif)</span></label>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {[['<60','< 60 ans'],['60-70','60–70 ans'],['70-80','70–80 ans'],['80+','> 80 ans']].map(([val, lbl]) => (
+                          <button key={val} onClick={() => setForm(p => ({ ...p, parents_age: val }))}
+                            style={{ flex: 1, padding: '9px 4px', border: `2px solid ${form.parents_age === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_age === val ? '#F0F4FF' : 'white', color: form.parents_age === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: form.parents_age === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                    <div>
+                      <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Ont-ils organisé leur transmission ?</label>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {[['oui','Oui'],['en_partie','En partie'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
+                          <button key={val} onClick={() => setForm(p => ({ ...p, parents_orga: val }))}
+                            style={{ padding: '10px', border: `2px solid ${form.parents_orga === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_orga === val ? '#FDF8F0' : 'white', color: form.parents_orga === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.parents_orga === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
                 {/* Grands-parents */}
                 <div>
@@ -1081,6 +1120,19 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                     ))}
                   </div>
                 </div>
+                {form.grands_parents_en_vie === 'oui' && (
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Âge de vos grands-parents <span style={{ color: '#A8A8B8' }}>(approximatif)</span></label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[['<70','< 70 ans'],['70-80','70–80 ans'],['80+','> 80 ans']].map(([val, lbl]) => (
+                        <button key={val} onClick={() => setForm(p => ({ ...p, gp_age: val }))}
+                          style={{ flex: 1, padding: '9px 4px', border: `2px solid ${form.gp_age === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.gp_age === val ? '#F0F4FF' : 'white', color: form.gp_age === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: form.gp_age === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {/* Patrimoine */}
                 <div>
                   <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 4 }}>Votre patrimoine estimé</label>
