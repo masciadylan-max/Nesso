@@ -1486,12 +1486,6 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
               )}
             </div>
 
-            <div style={{ textAlign: 'center', marginTop: 14 }}>
-              <button onClick={start}
-                style={{ background: 'none', border: 'none', color: '#A8A8B8', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
-                Préférez-vous une conversation directe ?
-              </button>
-            </div>
           </div>
         )}
 
