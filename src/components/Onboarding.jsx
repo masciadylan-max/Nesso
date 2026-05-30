@@ -302,6 +302,12 @@ const FORM_INIT = {
   parents_en_vie: '', parents_age: '', parents_orga: '',
   grands_parents_en_vie: '', gp_age: '',
   patrimoine: '', evenement: '', focus: '',
+  // Focus A
+  parents_patrimoine: '', parents_compo: [], gp_patrimoine: '', donations_recues: '',
+  // Focus B
+  testament: '', av_existante: '', actifs_type: [],
+  // Focus C
+  statut_pro: '', revenus_foyer: '', per_ouvert: '', pea_ouvert: '',
 };
 
 const buildContextMessage = (f) => {
@@ -342,6 +348,20 @@ const buildContextMessage = (f) => {
     patriLabel ? `Patrimoine estimé (tous actifs) : ${patriLabel}` : null,
     f.evenement?.trim() ? `Événement de vie : ${f.evenement}` : null,
     focusLabel ? `Focus choisi : ${focusLabel}` : null,
+    // Focus A
+    f.focus === 'A' && f.parents_patrimoine ? `Patrimoine parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.parents_patrimoine] || f.parents_patrimoine}` : null,
+    f.focus === 'A' && f.parents_compo?.length > 0 ? `Composition patrimoine parents : ${f.parents_compo.join(', ')}` : null,
+    f.focus === 'A' && f.grands_parents_en_vie === 'oui' && f.gp_patrimoine ? `Patrimoine grands-parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.gp_patrimoine] || f.gp_patrimoine}` : null,
+    f.focus === 'A' && f.donations_recues ? `Donations déjà reçues : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.donations_recues] || f.donations_recues}` : null,
+    // Focus B
+    f.focus === 'B' && f.testament ? `Testament existant : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.testament] || f.testament}` : null,
+    f.focus === 'B' && f.av_existante ? `Assurance-vie : ${{ oui: 'Oui — bénéficiaires à jour', oui_maj: 'Oui — à mettre à jour', non: 'Non' }[f.av_existante] || f.av_existante}` : null,
+    f.focus === 'B' && f.actifs_type?.length > 0 ? `Types d'actifs principaux : ${f.actifs_type.join(', ')}` : null,
+    // Focus C
+    f.focus === 'C' && f.statut_pro ? `Statut professionnel : ${{ salarie: 'Salarié', tns: 'TNS / indépendant', dirigeant: 'Dirigeant de société', retraite: 'Retraité' }[f.statut_pro] || f.statut_pro}` : null,
+    f.focus === 'C' && f.revenus_foyer ? `Revenus annuels foyer : ${{ '<30': '< 30 000 €', '30-60': '30 000 – 60 000 €', '60-100': '60 000 – 100 000 €', '100-200': '100 000 – 200 000 €', '200+': '> 200 000 €' }[f.revenus_foyer] || f.revenus_foyer}` : null,
+    f.focus === 'C' && f.per_ouvert ? `PER ouvert : ${{ oui: 'Oui', non: 'Non' }[f.per_ouvert]}` : null,
+    f.focus === 'C' && f.pea_ouvert ? `PEA ouvert : ${{ oui: 'Oui', non: 'Non' }[f.pea_ouvert]}` : null,
   ].filter(Boolean);
 
   return lines.join('\n');
@@ -745,9 +765,12 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
   const hasSavedConversation = savedMessages && savedMessages.length > 4;
 
   // Helpers formulaire
+  const totalSteps = form.focus ? 5 : 4; // étape 5 = sous-formulaire focus
+  const stepTitles = ['Vous', 'Votre famille', 'Votre situation', 'Votre priorité', { A: 'La transmission à recevoir', B: 'Ce que vous transmettrez', C: 'Votre situation fiscale' }[form.focus] || 'Précisions'];
   const canAdvance = () => {
     if (formStep === 1) return form.prenom.trim().length > 0;
     if (formStep === 2) return form.situation_civile !== '';
+    if (formStep === 4) return form.focus !== '';
     return true;
   };
 
@@ -933,14 +956,14 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
             {/* En-tête + barre de progression */}
             <div style={{ marginBottom: 28 }}>
               <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', margin: '0 0 5px' }}>
-                Étape {formStep} sur 4
+                Étape {formStep} sur {totalSteps}
               </p>
               <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 14px' }}>
-                {['Vous', 'Votre famille', 'Votre situation', 'Votre priorité'][formStep - 1]}
+                {stepTitles[formStep - 1]}
               </h2>
               <div style={{ display: 'flex', gap: 4 }}>
-                {[1,2,3,4].map(s => (
-                  <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: s <= formStep ? '#C9A96E' : '#E5E7EB', transition: 'background 0.3s' }} />
+                {Array.from({ length: totalSteps }).map((_, i) => (
+                  <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < formStep ? '#C9A96E' : '#E5E7EB', transition: 'background 0.3s' }} />
                 ))}
               </div>
             </div>
@@ -1190,6 +1213,166 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
               </div>
             )}
 
+            {/* ── Étape 5 : Sous-formulaire focus ── */}
+            {formStep === 5 && form.focus === 'A' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Quelques précisions pour calibrer l'audit sur ce que vous allez recevoir.</p>
+                {/* Patrimoine parents */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Patrimoine estimé de vos parents</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, parents_patrimoine: val }))}
+                        style={{ padding: '10px 16px', border: `2px solid ${form.parents_patrimoine === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_patrimoine === val ? '#FDF8F0' : 'white', color: form.parents_patrimoine === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.parents_patrimoine === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Composition patrimoine parents */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#A8A8B8' }}>(plusieurs choix possibles)</span></label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {[['Immobilier','🏠'],['Épargne / financier','💰'],['Entreprise','🏢'],['Bien étranger','🌍'],['Autre','◇']].map(([lbl, ico]) => {
+                      const sel = (form.parents_compo || []).includes(lbl);
+                      return (
+                        <button key={lbl} onClick={() => setForm(p => ({ ...p, parents_compo: sel ? p.parents_compo.filter(x => x !== lbl) : [...(p.parents_compo||[]), lbl] }))}
+                          style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 20, background: sel ? '#F0F4FF' : 'white', color: sel ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          {ico} {lbl}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Patrimoine GP si en vie */}
+                {form.grands_parents_en_vie === 'oui' && (
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Patrimoine estimé de vos grands-parents</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
+                        <button key={val} onClick={() => setForm(p => ({ ...p, gp_patrimoine: val }))}
+                          style={{ padding: '10px 16px', border: `2px solid ${form.gp_patrimoine === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.gp_patrimoine === val ? '#FDF8F0' : 'white', color: form.gp_patrimoine === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.gp_patrimoine === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Donations reçues */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous déjà reçu des donations de vos parents ou grands-parents ?</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[['oui','Oui'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, donations_recues: val }))}
+                        style={{ flex: 1, padding: '10px', border: `2px solid ${form.donations_recues === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.donations_recues === val ? '#F0F4FF' : 'white', color: form.donations_recues === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.donations_recues === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {formStep === 5 && form.focus === 'B' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour cibler l'audit sur votre transmission et la protection de vos proches.</p>
+                {/* Testament */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous un testament ?</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {[['oui','Oui'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, testament: val }))}
+                        style={{ flex: 1, padding: '10px', border: `2px solid ${form.testament === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.testament === val ? '#F0F4FF' : 'white', color: form.testament === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.testament === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Assurance-vie */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous une ou plusieurs assurances-vie ?</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[['oui','Oui — bénéficiaires à jour'],['oui_maj','Oui — à mettre à jour / je ne sais pas'],['non','Non']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, av_existante: val }))}
+                        style={{ padding: '10px 16px', border: `2px solid ${form.av_existante === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.av_existante === val ? '#FDF8F0' : 'white', color: form.av_existante === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.av_existante === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Types actifs */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Vos actifs principaux <span style={{ color: '#A8A8B8' }}>(plusieurs choix)</span></label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {[['Résidence principale','🏠'],['Immobilier locatif','🏢'],['Épargne / financier','💰'],['Entreprise','⚙'],['Bien étranger','🌍']].map(([lbl, ico]) => {
+                      const sel = (form.actifs_type || []).includes(lbl);
+                      return (
+                        <button key={lbl} onClick={() => setForm(p => ({ ...p, actifs_type: sel ? p.actifs_type.filter(x => x !== lbl) : [...(p.actifs_type||[]), lbl] }))}
+                          style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 20, background: sel ? '#F0F4FF' : 'white', color: sel ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          {ico} {lbl}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {formStep === 5 && form.focus === 'C' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour calibrer l'audit sur votre situation fiscale personnelle.</p>
+                {/* Statut pro */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Votre statut professionnel</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {[['salarie','Salarié'],['tns','TNS / indépendant'],['dirigeant','Dirigeant de société'],['retraite','Retraité']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, statut_pro: val }))}
+                        style={{ padding: '11px', border: `2px solid ${form.statut_pro === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.statut_pro === val ? '#F0F4FF' : 'white', color: form.statut_pro === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.statut_pro === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Revenus foyer */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Revenus annuels du foyer</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[['<30','< 30 000 €'],['30-60','30 000 – 60 000 €'],['60-100','60 000 – 100 000 €'],['100-200','100 000 – 200 000 €'],['200+','> 200 000 €']].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setForm(p => ({ ...p, revenus_foyer: val }))}
+                        style={{ padding: '10px 16px', border: `2px solid ${form.revenus_foyer === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.revenus_foyer === val ? '#FDF8F0' : 'white', color: form.revenus_foyer === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.revenus_foyer === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* PER / PEA */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>PER ouvert ?</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[['oui','Oui'],['non','Non']].map(([val, lbl]) => (
+                        <button key={val} onClick={() => setForm(p => ({ ...p, per_ouvert: val }))}
+                          style={{ flex: 1, padding: '9px', border: `2px solid ${form.per_ouvert === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.per_ouvert === val ? '#F0F4FF' : 'white', color: form.per_ouvert === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.per_ouvert === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>PEA ouvert ?</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {[['oui','Oui'],['non','Non']].map(([val, lbl]) => (
+                        <button key={val} onClick={() => setForm(p => ({ ...p, pea_ouvert: val }))}
+                          style={{ flex: 1, padding: '9px', border: `2px solid ${form.pea_ouvert === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.pea_ouvert === val ? '#F0F4FF' : 'white', color: form.pea_ouvert === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.pea_ouvert === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Navigation */}
             <div style={{ display: 'flex', gap: 10, marginTop: 28, alignItems: 'center' }}>
               {formStep > 1 && (
@@ -1198,14 +1381,14 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                   ← Retour
                 </button>
               )}
-              {formStep < 4 ? (
+              {formStep < totalSteps ? (
                 <button onClick={() => canAdvance() && setFormStep(s => s + 1)} disabled={!canAdvance()}
                   style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: canAdvance() ? '#1B2B4B' : '#E5E7EB', color: canAdvance() ? 'white' : '#A8A8B8', cursor: canAdvance() ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
                   Suivant →
                 </button>
               ) : (
-                <button onClick={() => form.focus && startWithForm(form)} disabled={!form.focus || loading}
-                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: form.focus && !loading ? '#C9A96E' : '#E5E7EB', color: form.focus && !loading ? 'white' : '#A8A8B8', cursor: form.focus && !loading ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
+                <button onClick={() => startWithForm(form)} disabled={loading}
+                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: !loading ? '#C9A96E' : '#E5E7EB', color: !loading ? 'white' : '#A8A8B8', cursor: !loading ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
                   {loading ? '⏳ Démarrage…' : 'Lancer mon audit →'}
                 </button>
               )}
