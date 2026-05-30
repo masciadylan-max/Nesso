@@ -368,7 +368,7 @@ const buildContextMessage = (f) => {
     focusLabel ? `Focus choisi : ${focusLabel}` : null,
     // Focus A
     f.focus === 'A' && f.parents_patrimoine ? `Patrimoine parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.parents_patrimoine] || f.parents_patrimoine}` : null,
-    f.focus === 'A' && f.parents_compo?.length > 0 ? `Composition patrimoine parents : ${f.parents_compo.join(', ')}` : null,
+    f.focus === 'A' && f.parents_compo?.length > 0 ? `Composition patrimoine parents : ${f.parents_compo.map(c => ({ rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne / Placements', entreprise: 'Entreprise', etranger: "Bien à l'étranger" })[c] || c).join(', ')}` : null,
     f.focus === 'A' && f.gp_patrimoine ? `Patrimoine grands-parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.gp_patrimoine] || f.gp_patrimoine}` : null,
     f.focus === 'A' && f.donations_recues ? `Donations déjà reçues : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.donations_recues] || f.donations_recues}` : null,
     f.focus === 'A' && f.oncles_tantes_maternels ? `Oncles/tantes côté maternel : ${f.oncles_tantes_maternels}` : null,
@@ -377,7 +377,7 @@ const buildContextMessage = (f) => {
     // Focus B
     f.focus === 'B' && f.testament ? `Testament existant : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.testament] || f.testament}` : null,
     f.focus === 'B' && f.av_existante ? `Assurance-vie : ${{ oui: 'Oui — bénéficiaires à jour', oui_maj: 'Oui — à mettre à jour', non: 'Non' }[f.av_existante] || f.av_existante}` : null,
-    f.focus === 'B' && f.actifs_type?.length > 0 ? `Types d'actifs principaux : ${f.actifs_type.join(', ')}` : null,
+    f.focus === 'B' && f.actifs_type?.length > 0 ? `Types d'actifs principaux : ${f.actifs_type.map(t => ({ rp: 'Résidence principale', locatif: 'Immobilier locatif', av: 'Assurance-vie', pea: 'PEA', per: 'PER', liquidites: 'Liquidités / Épargne', entreprise: 'Entreprise', etranger: "Bien à l'étranger" })[t] || t).join(', ')}` : null,
     // Focus C
     f.focus === 'C' && f.statut_pro ? `Statut professionnel : ${{ salarie: 'Salarié', tns: 'TNS / indépendant', dirigeant: 'Dirigeant de société', retraite: 'Retraité' }[f.statut_pro] || f.statut_pro}` : null,
     f.focus === 'C' && f.revenus_foyer ? `Revenus annuels foyer : ${{ '<30': '< 30 000 €', '30-60': '30 000 – 60 000 €', '60-100': '60 000 – 100 000 €', '100-200': '100 000 – 200 000 €', '200+': '> 200 000 €' }[f.revenus_foyer] || f.revenus_foyer}` : null,
@@ -582,6 +582,20 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
       if (fp.startsWith('Optimisation')) out.focus_audit = 'optimisation';
       else out.focus_audit = 'succession';
     }
+    out.famille = {
+      mere_prenom: null,
+      pere_prenom: null,
+      parents_en_vie: out.parents_en_vie ?? true,
+      gp_maternels_vivants: false,
+      gp_paternels_vivants: false,
+      fratrie: [],
+      autres: [],
+      patrimoine_parents_estime: 0,
+      patrimoine_gp_estime: 0,
+      gp_transmission_organisee: false,
+      gp_leviers_identifies: [],
+      ...(out.famille || {}),
+    };
     out.succession = {
       grands_parents_vivants: false,
       grands_parents_patrimoine_estime: 0,

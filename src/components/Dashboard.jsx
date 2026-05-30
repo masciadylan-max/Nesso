@@ -3,75 +3,379 @@ import { CALCULS, ACTIONS } from '../data.js';
 import { euro, getPersonne, getPatrimoine, filterActifsByPov } from '../utils.js';
 import { Badge, Skeleton, Modal } from './Shared.jsx';
 
-const computeUserCalculs = (patrimoine, userProfile) => {
-  const abattement = 200000;
-  const taxable = Math.max(0, patrimoine - abattement);
-  const taux = taxable < 50000 ? 0.08 : taxable < 200000 ? 0.18 : taxable < 500000 ? 0.25 : 0.30;
-  const droitsStatusQuo = Math.round(taxable * taux);
-  const droitsOptimise = Math.round(droitsStatusQuo * 0.15);
-  const totalImpots = Math.round(patrimoine * 0.012);
+// ── Barème progressif succession ligne directe (art. 777 CGI) ──────────────
+const calcDroitsBareme = (taxable) => {
+  if (taxable <= 0) return 0;
+  const tranches = [
+    { plafond: 8072,     taux: 0.05 },
+    { plafond: 12109,    taux: 0.10 },
+    { plafond: 15932,    taux: 0.15 },
+    { plafond: 552324,   taux: 0.20 },
+    { plafond: 902838,   taux: 0.30 },
+    { plafond: Infinity, taux: 0.45 },
+  ];
+  let droits = 0, base = 0;
+  for (const { plafond, taux } of tranches) {
+    const tranche = Math.min(taxable - base, plafond - base);
+    if (tranche <= 0) break;
+    droits += tranche * taux;
+    base = plafond;
+    if (base >= taxable) break;
+  }
+  return Math.round(droits);
+};
 
-  // IFI : uniquement patrimoine immobilier net, abattement 30% sur résidence principale
+// ── Barème IFI progressif (art. 977 CGI) ────────────────────────────────────
+const calcIFI = (net) => {
+  if (net < 1300000) return 0;
+  const tranches = [
+    { debut: 800000,   fin: 1300000,  taux: 0.005  },
+    { debut: 1300000,  fin: 2570000,  taux: 0.007  },
+    { debut: 2570000,  fin: 5000000,  taux: 0.010  },
+    { debut: 5000000,  fin: 10000000, taux: 0.0125 },
+    { debut: 10000000, fin: Infinity, taux: 0.015  },
+  ];
+  let ifi = 0;
+  for (const { debut, fin, taux } of tranches) {
+    const tranche = Math.min(net, fin) - debut;
+    if (tranche <= 0) continue;
+    ifi += tranche * taux;
+  }
+  return Math.round(ifi);
+};
+
+// ── Score de risque successoral — calculé sur les vrais signaux ─────────────
+const computeScore = (userProfile) => {
+  let score = 15; // baseline : toute situation non suivie comporte un risque résiduel
+  const alertes = (userProfile?.alertes || []).map(a => a.toLowerCase());
+  const situation = userProfile?.situation_civile || '';
+  const testamentExistant = userProfile?.succession?.testament_existant;
+  const hasAV = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
+
+  // Risques critiques
+  if ((situation === 'pacse' && !testamentExistant) || alertes.some(a => a.includes('pacs'))) score += 35;
+  if (alertes.some(a => a.includes('concubinage'))) score += 35;
+  if (alertes.some(a => a.includes('famille_recompos'))) score += 20;
+  if (alertes.some(a => a.includes('international'))) score += 15;
+  if (alertes.some(a => a.includes('ifi'))) score += 10;
+
+  // Risques structurels
+  if (situation === 'marie' && (userProfile?.enfants || 0) > 0 && !testamentExistant) score += 10;
+  if (!hasAV && (userProfile?.actifs?.length || 0) > 0) score += 10;
+
+  return Math.min(100, score);
+};
+
+// ── Calculs du tableau de bord — barèmes réels ──────────────────────────────
+const computeUserCalculs = (patrimoine, userProfile) => {
+  const nbEnfants = userProfile?.enfants || 0;
+  const situation  = userProfile?.situation_civile || '';
+
+  // Droits de succession — ligne directe (art. 779 + 777 CGI)
+  let droitsStatusQuo = 0;
+  let droitsOptimise  = 0;
+
+  if (nbEnfants > 0) {
+    // Abattement 100 000€ par enfant — parts égales entre héritiers
+    const partParEnfant      = Math.round(patrimoine / nbEnfants);
+    const taxableParEnfant   = Math.max(0, partParEnfant - 100000);
+    droitsStatusQuo          = calcDroitsBareme(taxableParEnfant) * nbEnfants;
+
+    // Optimisé : assurance-vie hors succession (152 500€/bénéficiaire) réduit la masse taxable
+    const avHorsSuccession   = Math.min(patrimoine * 0.35, 152500 * nbEnfants);
+    const masseApresAV       = Math.max(0, patrimoine - avHorsSuccession);
+    const partOptimisee      = Math.round(masseApresAV / nbEnfants);
+    const taxableOptimise    = Math.max(0, partOptimisee - 100000);
+    droitsOptimise           = calcDroitsBareme(taxableOptimise) * nbEnfants;
+
+  } else if (situation === 'marie' || situation === 'pacse') {
+    // Conjoint/partenaire (avec testament) : exonéré → droits nuls
+    // Sans testament pour PACS : succession aux parents (abattement 100k chacun, ligne directe)
+    const parentsEnVie = userProfile?.parents_en_vie;
+    if (situation === 'pacse' && !userProfile?.succession?.testament_existant && parentsEnVie) {
+      const partParParent = Math.round(patrimoine / 2);
+      droitsStatusQuo     = calcDroitsBareme(Math.max(0, partParParent - 100000)) * 2;
+      droitsOptimise      = Math.round(droitsStatusQuo * 0.5);
+    }
+    // Marié + pas d'enfants : conjoint exonéré, droits nuls
+  } else {
+    // Célibataire / concubin sans enfants
+    const parentsEnVie = userProfile?.parents_en_vie;
+    if (parentsEnVie) {
+      // Succession aux parents : ligne directe ascendante, abattement 100k/parent
+      const partParParent = Math.round(patrimoine / 2);
+      droitsStatusQuo     = calcDroitsBareme(Math.max(0, partParParent - 100000)) * 2;
+    } else {
+      // Fratrie : abattement 15 932€, taux 35-45%
+      const fratrie       = Math.max(1, (userProfile?.famille?.fratrie || []).length);
+      const partFratrie   = Math.round(patrimoine / fratrie);
+      const taxFratrie    = Math.max(0, partFratrie - 15932);
+      const droitFratrie  = taxFratrie <= 24430
+        ? Math.round(taxFratrie * 0.35)
+        : Math.round(24430 * 0.35 + (taxFratrie - 24430) * 0.45);
+      droitsStatusQuo     = droitFratrie * fratrie;
+    }
+    droitsOptimise = Math.round(droitsStatusQuo * 0.5); // AV + testament peuvent couvrir ~50%
+  }
+
+  // IFI — barème progressif
   const immoActifs = (userProfile?.actifs || []).filter(a => a.categorie === 'immobilier');
   const patrimoineImmoNet = immoActifs.reduce((sum, a) => {
     const abattRP = a.type === 'Résidence principale' ? 0.30 : 0;
     return sum + (a.valeur || 0) * (1 - abattRP);
   }, 0);
-  const ifi = patrimoineImmoNet > 1300000 ? Math.round((patrimoineImmoNet - 800000) * 0.005) : 0;
+  const ifi = calcIFI(patrimoineImmoNet);
+
+  // IR estimé — TMI extrait par Haiku ou barème IR 2024
+  const tmiStr  = userProfile?.optimisation?.tmi;
+  const tmiNum  = parseInt(tmiStr) || 0;
+  const revenus = userProfile?.optimisation?.revenus_annuels_foyer || 0;
+  let ir = 0;
+  if (revenus > 0) {
+    if (tmiNum > 0) {
+      // Taux effectif ≈ TMI × 0,55 (intègre les tranches inférieures et les abattements courants)
+      ir = Math.round(revenus * (tmiNum / 100) * 0.55);
+    } else {
+      // Barème IR 2024 (une part) — approximation foyer monoactif
+      const baremeIR = [
+        { plafond: 11294,   taux: 0 },
+        { plafond: 28797,   taux: 0.11 },
+        { plafond: 82341,   taux: 0.30 },
+        { plafond: 177106,  taux: 0.41 },
+        { plafond: Infinity, taux: 0.45 },
+      ];
+      let irBrut = 0, prev = 0;
+      for (const { plafond, taux } of baremeIR) {
+        const tranche = Math.min(revenus - prev, plafond - prev);
+        if (tranche <= 0) break;
+        irBrut += tranche * taux;
+        prev = plafond;
+      }
+      ir = Math.round(irBrut * 0.85); // -15% pour abattements et crédits courants
+    }
+  }
+
+  // Prélèvements sociaux sur revenus financiers (17,2% sur rendement estimé 2%)
+  const capitalFinancier = (userProfile?.actifs || [])
+    .filter(a => a.categorie === 'financier')
+    .reduce((s, a) => s + (a.valeur || 0), 0);
+  const ps = Math.round(capitalFinancier * 0.02 * 0.172);
+
+  const totalImpots = ir + ifi + ps;
+
+  // Économie PER potentielle (si TMI ≥ 30% et PER non ouvert)
+  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
+  const perOuvert   = dispositifs.some(d => d.toLowerCase().includes('per'));
+  const economiePER = (!perOuvert && tmiNum >= 30 && revenus > 0)
+    ? Math.round(Math.min(revenus * 0.10, 10000) * (tmiNum / 100))
+    : 0;
 
   return {
     droits: { statusQuo: droitsStatusQuo, optimise: droitsOptimise },
     economieSuccession: Math.max(0, droitsStatusQuo - droitsOptimise),
-    impots: { IR: Math.round(totalImpots * 0.65), IFI: ifi, PS: Math.round(totalImpots * 0.35), total: totalImpots },
-    economiesAnnuelles: Math.round(totalImpots * 0.18),
-    gainDixAns: Math.round(totalImpots * 1.8),
-    score: userProfile?.score || 60,
-    successionEstimee: Math.round(patrimoine * 0.65),
+    impots: { IR: ir, IFI: ifi, PS: ps, total: totalImpots },
+    economiesAnnuelles: economiePER,
+    gainDixAns: economiePER * 10,
+    score: computeScore(userProfile),
+    successionEstimee: droitsStatusQuo,
   };
 };
 
+// ── Actions prioritaires — orientées par focus et alertes réelles ────────────
 const generateUserActions = (userProfile, patrimoine) => {
-  const actions = [];
-  const alertes = userProfile?.alertes || [];
+  const actions   = [];
+  const alertes   = (userProfile?.alertes || []).map(a => a.toLowerCase());
+  const focus     = userProfile?.focus_audit || 'les_deux';
+  const situation = userProfile?.situation_civile || '';
+  const nbEnfants = userProfile?.enfants || 0;
+  const testamentExistant = userProfile?.succession?.testament_existant;
+  const tmiNum    = parseInt(userProfile?.optimisation?.tmi) || 0;
+  const revenus   = userProfile?.optimisation?.revenus_annuels_foyer || 0;
+  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
+  const perOuvert = dispositifs.some(d => d.toLowerCase().includes('per'));
+  const peaOuvert = dispositifs.some(d => d.toLowerCase().includes('pea'));
+  const hasAV     = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
+  const hasLocatif = (userProfile?.actifs || []).some(a => a.type === 'Bien locatif');
+  const parentsEnVie   = userProfile?.parents_en_vie;
+  const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
+  const patrimoineGP   = userProfile?.famille?.patrimoine_gp_estime || 0;
+  const gpVivants = userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants || userProfile?.succession?.grands_parents_vivants;
+  const immoActifs = (userProfile?.actifs || []).filter(a => a.categorie === 'immobilier');
+  const patrimoineImmoNet = immoActifs.reduce((s, a) => s + (a.valeur || 0) * (a.type === 'Résidence principale' ? 0.70 : 1), 0);
 
-  const patrimoineImmoNet = (userProfile?.actifs || [])
-    .filter(a => a.categorie === 'immobilier')
-    .reduce((sum, a) => sum + (a.valeur || 0) * (a.type === 'Résidence principale' ? 0.70 : 1), 0);
-  // IFI : on se fie UNIQUEMENT au calcul mathématique sur les actifs réels du foyer
-  // (et non à l'alerte 'ifi' générée par Haiku, qui peut rester stale si les biens
-  // ont été nettoyés a posteriori). Source de vérité : le patrimoine immobilier net.
+  // ── ALERTES CRITIQUES — rouge, toujours prioritaires ─────────────────────
+  // IFI : source de vérité = calcul sur actifs réels (pas l'alerte Haiku qui peut être stale)
   if (patrimoineImmoNet > 1300000) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité IFI', titre: 'Bilan IFI obligatoire', description: 'Votre patrimoine dépasse 1,3M€ — vous êtes potentiellement soumis à l\'IFI. Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (parts de résidence principale, bois et forêts, biens professionnels).', economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', etapes: ['Lister tous vos actifs immobiliers et financiers', 'Identifier les actifs exonérés (biens pro, forêts, résidence principale à 30%)', 'Calculer le passif déductible (dettes, emprunts)', 'Mandater un fiscaliste pour sécuriser la déclaration IFI'], partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
+    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité IFI', titre: 'Bilan IFI obligatoire', description: "Votre patrimoine immobilier net dépasse 1,3M€ — vous êtes soumis à l'IFI (barème progressif de 0,5% à 1,5%). Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (résidence principale à 30%, bois et forêts, biens professionnels).", economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', etapes: ["Lister tous vos actifs immobiliers et calculer le patrimoine net (hors dettes)", "Identifier les actifs exonérés (résidence principale -30%, biens pro, forêts)", "Calculer le passif déductible (emprunts, dettes liées aux actifs imposables)", "Mandater un fiscaliste pour sécuriser la déclaration IFI"], partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
   }
-  if (alertes.some(a => a.toLowerCase().includes('étranger') || a.toLowerCase().includes('international'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité internationale', titre: 'Anticiper la fiscalité internationale', description: 'Un bien étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès. Une structuration préventive peut réduire drastiquement la facture.', economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois', etapes: ['Identifier la loi applicable selon UE 650/2012', 'Vérifier l\'existence d\'une convention bilatérale avec le pays concerné', 'Évaluer une structuration préventive (SCI, holding, trust)', 'Rédiger un certificat successoral européen si besoin'], partenaire: { nom: 'Maison Droit & Patrimoine International', type: 'Avocat fiscaliste international partenaire', disponibilite: 'Sur rendez-vous' } });
+  if (alertes.some(a => a.includes('international'))) {
+    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité internationale', titre: 'Anticiper la fiscalité internationale', description: "Un bien à l'étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès. Sans structuration préventive, la facture peut être considérable.", economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois', etapes: ["Identifier la loi applicable selon le règlement UE 650/2012", "Vérifier la convention bilatérale avec le pays concerné", "Évaluer une structuration préventive (SCI, trust, holding)", "Rédiger un certificat successoral européen si nécessaire"], partenaire: { nom: 'Maison Droit & Patrimoine International', type: 'Avocat fiscaliste international partenaire', disponibilite: 'Sur rendez-vous' } });
   }
-  // PACS sans testament : partenaire hérite de 0€
-  if (alertes.some(a => a.toLowerCase().includes('pacs'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Testament PACS', titre: 'Rédiger un testament d\'urgence', description: 'En l\'absence de testament, votre partenaire de PACS n\'hérite légalement de rien — tous vos biens iraient à vos héritiers légaux (parents, fratrie). Un testament olographe peut être rédigé immédiatement, gratuitement. C\'est la priorité absolue pour protéger votre partenaire.', economieLabel: '100% du patrimoine protégé', economie: 0, coutLabel: 'Gratuit (olographe) ou ~150€ (notarié)', cout: 0, delai: 'Cette semaine', etapes: ['Rédiger un testament olographe (manuscrit, daté, signé) immédiatement', 'Le déposer chez un notaire pour sécurisation (FCDDV)', 'Envisager un testament authentique pour les patrimoines importants', 'Revoir la clause bénéficiaire de vos assurances-vie en parallèle'], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
+  if ((situation === 'pacse' && !testamentExistant) || alertes.some(a => a.includes('pacs'))) {
+    actions.push({ urgence: 'rouge', titreGenerique: 'Testament PACS', titre: 'Rédiger un testament — urgence absolue', description: "Sans testament, votre partenaire de PACS n'hérite légalement de rien. Tous vos biens iraient à vos héritiers légaux (parents, fratrie). Un testament olographe peut être rédigé cette semaine, gratuitement — c'est la priorité absolue.", economieLabel: '100% du patrimoine protégé', economie: 0, coutLabel: 'Gratuit (olographe) ou ~150€ (notarié)', cout: 0, delai: 'Cette semaine', etapes: ["Rédiger un testament olographe (entièrement manuscrit, daté, signé)", "Le déposer chez un notaire pour enregistrement au FCDDV", "Revoir simultanément la clause bénéficiaire de vos assurances-vie", "Envisager un testament authentique si patrimoine > 200k€"], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
   }
-  // Concubinage : 60% de droits de succession
-  if (alertes.some(a => a.toLowerCase().includes('concubinage'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Protection concubin', titre: 'Protéger votre concubin(e)', description: 'En concubinage, votre partenaire est fiscalement un étranger : 60% de droits de succession sur tout ce qu\'il/elle reçoit. Un testament est indispensable mais ne suffit pas — l\'assurance-vie est le seul outil permettant de transmettre hors succession avec une fiscalité réduite.', economieLabel: 'Évite 60% de droits de succession', economie: 0, coutLabel: '~200€ (notaire + AV)', cout: 200, delai: '< 1 mois', etapes: ['Rédiger un testament pour léguer vos biens au concubin', 'Ouvrir une assurance-vie avec le concubin comme bénéficiaire (152 500€ exonérés)', 'Envisager une SCI ou donation avec réserve d\'usufruit pour l\'immobilier', 'Étudier l\'opportunité du PACS (droits successoraux améliorés)'], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
+  if (alertes.some(a => a.includes('concubinage'))) {
+    actions.push({ urgence: 'rouge', titreGenerique: 'Protection concubin', titre: 'Protéger votre concubin(e) — 60% de droits de succession', description: "En concubinage, votre partenaire est fiscalement un étranger : abattement de 1 594€ seulement et 60% de droits de succession sur tout ce qu'il reçoit. Testament + assurance-vie sont les deux seuls leviers pour transmettre sans détruire le capital.", economieLabel: 'Évite 60% de droits de succession', economie: 0, coutLabel: '~200€ (notaire + AV)', cout: 200, delai: '< 1 mois', etapes: ["Rédiger un testament pour léguer vos biens à votre concubin", "Ouvrir une assurance-vie avec votre concubin comme bénéficiaire (152 500€ exonérés)", "Étudier l'opportunité du PACS (droits successoraux considérablement améliorés)", "Considérer une clause tontinière sur le bien immobilier commun"], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
   }
-  // Famille recomposée
-  if (alertes.some(a => a.toLowerCase().includes('famille_recomposee') || a.toLowerCase().includes('recompos'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Famille recomposée', titre: 'Sécuriser la famille recomposée', description: 'En famille recomposée, sans testament, votre conjoint n\'hérite que de l\'usufruit d\'un quart de vos biens (art. 757 CC) — le reste va à vos enfants, y compris d\'une union précédente. Un testament et une clause de préciput peuvent éviter que le conjoint survivant soit en indivision forcée avec vos enfants.', economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~400€ (notaire)', cout: 400, delai: '< 3 mois', etapes: ['Dresser l\'inventaire complet avec tous les enfants de chaque union', 'Consulter un notaire spécialisé en familles recomposées', 'Rédiger un testament en faveur du conjoint survivant', 'Étudier un contrat de mariage avec clause de préciput si non marié'], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
+  if (alertes.some(a => a.includes('famille_recompos') || a.includes('recompos'))) {
+    actions.push({ urgence: 'rouge', titreGenerique: 'Famille recomposée', titre: 'Sécuriser la transmission en famille recomposée', description: "Sans testament, votre conjoint n'hérite que de l'usufruit d'un quart de vos biens (art. 757 CC) — le reste va à vos enfants, y compris d'une union précédente. Ce mécanisme peut créer une indivision forcée entre votre conjoint et vos enfants.", economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~400€ (notaire)', cout: 400, delai: '< 3 mois', etapes: ["Dresser l'inventaire complet avec tous les enfants de chaque union", "Consulter un notaire spécialisé en familles recomposées", "Rédiger un testament avec clause de préciput en faveur du conjoint", "Étudier l'adoption simple des beaux-enfants si égalité de traitement souhaitée"], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
   }
-  if (!userProfile?.regime && userProfile?.situation_civile === 'marie') {
-    actions.push({ urgence: 'orange', titreGenerique: 'Régime matrimonial', titre: 'Clarifier votre régime matrimonial', description: 'Le régime matrimonial conditionne toute la transmission patrimoniale. Sans contrat de mariage, vous êtes en communauté légale réduite aux acquêts — ce qui peut créer des situations défavorables pour le conjoint survivant ou les enfants selon votre situation.', economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois', etapes: ['Faire un bilan patrimonial pour identifier les risques', 'Consulter un notaire pour comparer les régimes (communauté, séparation, participation aux acquêts)', 'Signer un contrat de mariage ou un avenant', 'Homologuer si nécessaire au tribunal judiciaire'], partenaire: { nom: 'Office Notarial Beaumont', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
+
+  // ── FOCUS A — Transmission parentale (ce qu'ils vont recevoir) ────────────
+  if (focus === 'succession' || focus === 'les_deux') {
+    // Saut de génération si GP vivants avec patrimoine significatif
+    if (gpVivants && patrimoineGP > 100000) {
+      const fratrie = (userProfile?.famille?.fratrie || []).length;
+      const nbPetitsEnfants = 1 + fratrie; // utilisateur + fratrie
+      actions.push({
+        urgence: 'orange', titreGenerique: 'Saut de génération',
+        titre: 'Étudier le saut de génération avec vos grands-parents',
+        description: `Vos grands-parents ont un patrimoine estimé à ${euro(patrimoineGP)}. Si ce patrimoine transite GP → parents → vous, il sera taxé deux fois. Une donation directe GP → petits-enfants (abattement propre de 31 786€/petit-enfant, tous les 15 ans) évite cette double imposition sur un même actif.`,
+        economieLabel: 'Évite la double imposition sur la même valeur', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois',
+        etapes: [
+          `Calculer les droits avec double transmission (GP→parent : ${nbPetitsEnfants > 1 ? `abattement partagé entre ${nbPetitsEnfants} petits-enfants` : 'abattement 31 786€'}) vs donation directe`,
+          "Identifier le bien le plus adapté au saut de génération (hors bien avec affect fort pour les parents)",
+          "Vérifier l'accord des parents — ils renoncent à une partie de leur héritage",
+          "Formaliser par acte de donation notarié"
+        ],
+        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' }
+      });
+    }
+    // Anticiper la transmission des parents si patrimoine significatif et non organisé
+    if (parentsEnVie && patrimoineParents > 150000) {
+      actions.push({
+        urgence: 'orange', titreGenerique: 'Transmission parentale',
+        titre: 'Anticiper la transmission du patrimoine de vos parents',
+        description: `Le patrimoine de vos parents (estimé à ${euro(patrimoineParents)}) peut être optimisé dès maintenant. Chaque parent peut donner 100 000€ par enfant tous les 15 ans, sans droits. Une donation organisée avec un notaire, faite aujourd'hui, réduit la base taxable future — et gèle les valeurs si c'est une donation-partage.`,
+        economieLabel: "Jusqu'à 100 000€ par parent, par enfant exonérés", economie: 0, coutLabel: '~400–800€ (notaire)', cout: 600, delai: '< 12 mois',
+        etapes: [
+          "Inventorier les actifs transmissibles des parents (immo, AV, financier)",
+          "Vérifier le rappel fiscal : donations < 15 ans à déduire de l'abattement",
+          "Étudier une donation avec réserve d'usufruit pour les actifs immobiliers (parents gardent les revenus)",
+          "Envisager une donation-partage pour geler les valeurs et éviter les conflits entre héritiers"
+        ],
+        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' }
+      });
+    }
+    // Rappel fiscal : donations passées approchant les 15 ans
+    const now = new Date().getFullYear();
+    const donationsAnciennetes = (userProfile?.succession?.donations_passees || [])
+      .filter(d => d.annee && (now - d.annee) >= 10);
+    if (donationsAnciennetes.length > 0) {
+      const annee = donationsAnciennetes[0].annee;
+      actions.push({
+        urgence: 'orange', titreGenerique: 'Rappel fiscal donations',
+        titre: `Fenêtre fiscale — votre abattement se renouvelle vers ${annee + 15}`,
+        description: `Une donation reçue en ${annee} consomme votre abattement de 100 000€ jusqu'en ${annee + 15}. Si vos parents ou grands-parents ont d'autres actifs à transmettre, la fenêtre se rouvre dans ${(annee + 15) - now} an${(annee + 15) - now > 1 ? 's' : ''}. À anticiper pour optimiser le timing.`,
+        economieLabel: 'Optimise le timing des transmissions futures', economie: 0, coutLabel: 'Gratuit (consultation)', cout: 0, delai: `Avant ${annee + 15}`,
+        etapes: [
+          "Lister toutes les donations reçues et leurs dates d'enregistrement",
+          "Calculer la date exacte de renouvellement de l'abattement par donateur",
+          "Anticiper la prochaine donation pour profiter du plein abattement",
+          "Vérifier si le don familial en numéraire (31 865€) est encore disponible"
+        ],
+        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' }
+      });
+    }
   }
-  if (patrimoine > 0) {
-    actions.push({ urgence: 'vert', titreGenerique: 'Assurance-vie', titre: 'Ouvrir ou alimenter une assurance-vie', description: 'L\'assurance-vie est le levier d\'optimisation successorale le plus puissant en France : 152 500€ par bénéficiaire hors succession avant 70 ans. La clause bénéficiaire, rédigée sur mesure, peut démultiplier cet avantage. Plus tôt vous commencez, plus l\'abattement est exploitable.', economieLabel: `Jusqu'à 152 500€ par bénéficiaire hors succession`, economie: 152500, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois', etapes: ['Ouvrir un contrat multisupport chez un assureur sérieux', 'Rédiger une clause bénéficiaire sur mesure (pas la clause standard)', 'Alimenter avant 70 ans pour bénéficier des abattements maximaux', 'Réviser la clause à chaque changement de situation familiale'], partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' } });
+
+  // ── FOCUS C — Optimisation fiscale ───────────────────────────────────────
+  if (focus === 'optimisation' || focus === 'les_deux') {
+    // PER si TMI ≥ 30% et non ouvert
+    if (!perOuvert && tmiNum >= 30 && revenus > 0) {
+      const economie = Math.round(Math.min(revenus * 0.10, 10000) * (tmiNum / 100));
+      actions.push({
+        urgence: 'orange', titreGenerique: 'PER',
+        titre: `Ouvrir un PER — ${euro(economie)}/an d'impôt en moins`,
+        description: `À ${tmiNum}% de TMI, chaque euro versé sur un PER réduit votre impôt de ${tmiNum} centimes. Sur 10 000€ versés cette année : ${euro(Math.round(10000 * tmiNum / 100))} d'économies immédiates. Le capital sort à la retraite, souvent à un TMI plus faible — et reste hors succession si décès avant retraite.`,
+        economieLabel: `${euro(economie)} d'impôt économisé/an`, economie, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 1 mois',
+        etapes: [
+          "Trouver votre plafond épargne retraite disponible (ligne 6QS de votre avis d'imposition)",
+          "Ouvrir un PER individuel (Linxea Spirit, Nalo, Boursorama Retraite...)",
+          "Verser avant le 31 décembre pour déduire sur l'année fiscale en cours",
+          "Calculer l'arbitrage PER vs assurance-vie selon votre horizon de retraite"
+        ],
+        partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
+      });
+    }
+    // Dirigeant : Dutreil
+    if (alertes.some(a => a.includes('dutreil'))) {
+      actions.push({
+        urgence: 'orange', titreGenerique: 'Pacte Dutreil',
+        titre: "Anticiper la transmission d'entreprise — Pacte Dutreil",
+        description: "Le Pacte Dutreil permet de transmettre votre entreprise avec 75% d'exonération de droits. Mais l'engagement collectif de conservation doit durer 2 ans minimum avant la transmission. Plus vous attendez, plus vous perdez en flexibilité sur le timing.",
+        economieLabel: "75% d'exonération sur la valeur de l'entreprise", economie: 0, coutLabel: '~1 000€ (avocat + notaire)', cout: 1000, delai: '< 6 mois',
+        etapes: [
+          "Faire évaluer la société par un expert-comptable ou commissaire aux comptes",
+          "Identifier les associés éligibles pour l'engagement collectif (2 ans minimum)",
+          "Préparer la transmission via donation ou cession aux héritiers",
+          "Formaliser avec un avocat fiscaliste spécialisé Dutreil"
+        ],
+        partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' }
+      });
+    }
+    // Immo locatif + TMI ≥ 30% : LMNP ou déficit foncier
+    if (hasLocatif && tmiNum >= 30) {
+      actions.push({
+        urgence: 'orange', titreGenerique: 'Optimisation locatif',
+        titre: 'Optimiser la fiscalité de votre bien locatif',
+        description: `En location nue, vos revenus fonciers sont taxés à ${tmiNum}% + 17,2% de prélèvements sociaux. Le passage en LMNP (location meublée) permet d'amortir le bien comptablement et de ramener vos revenus locatifs imposables à zéro — sans changer vos loyers réels.`,
+        economieLabel: 'Revenus locatifs défiscalisés', economie: 0, coutLabel: '~500€ (expert-comptable)', cout: 500, delai: '< 6 mois',
+        etapes: [
+          "Vérifier la faisabilité du passage en meublé (bail, règlement de copropriété)",
+          "Mandater un expert-comptable pour établir un tableau d'amortissement",
+          "Calculer le déficit foncier reportable si location nue maintenue (imputable 10 700€/an sur revenus globaux)",
+          "Arbitrer LMNP amortissement vs déficit foncier selon votre TMI et votre horizon de détention"
+        ],
+        partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' }
+      });
+    }
+    // PEA si non ouvert — démarrer l'horloge fiscale
+    if (!peaOuvert && patrimoine > 0) {
+      actions.push({
+        urgence: 'vert', titreGenerique: 'PEA',
+        titre: 'Ouvrir un PEA — déclencher l\'horloge fiscale maintenant',
+        description: "Après 5 ans, les plus-values de votre PEA sont exonérées d'impôt (hors prélèvements sociaux 17,2%). Plafond : 150 000€/personne. L'horloge fiscale commence à la date d'ouverture — un versement symbolique aujourd'hui vous met en avance sur la fiscalité de demain.",
+        economieLabel: 'Plus-values exonérées après 5 ans', economie: 0, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 1 mois',
+        etapes: [
+          "Ouvrir un PEA en ligne (Fortuneo, Boursorama, Bourse Direct — 0€ de frais d'ouverture)",
+          "Verser même un montant symbolique (1€ suffit) pour démarrer l'horloge fiscale",
+          "Investir progressivement en ETF World pour optimiser le couple risque/rendement",
+          "Maximiser avant 150 000€ avant tout autre véhicule d'investissement boursier"
+        ],
+        partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
+      });
+    }
   }
-  if (userProfile?.objectifs) {
-    actions.push({ urgence: 'vert', titreGenerique: 'Stratégie notariale', titre: 'Formaliser votre stratégie avec un notaire', description: `Sur la base de vos objectifs (${userProfile.objectifs}), un notaire patrimonial peut formaliser une stratégie complète : donations avec réserve d'usufruit, testament sur mesure, mandat de protection future. Le coût de la consultation est souvent récupéré dès la première optimisation réalisée.`, economieLabel: 'Stratégie patrimoniale sur mesure', economie: 0, coutLabel: '~500€ (consultation initiale)', cout: 500, delai: '6–12 mois', etapes: ['Rassembler l\'inventaire complet du patrimoine familial', 'Consulter un notaire patrimonial pour un bilan successoral', 'Mettre en place les actes adaptés (donation, testament, mandat de protection future)', 'Planifier les donations progressives dans le temps'], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' } });
+
+  // ── AV — levier universel si non ouvert ──────────────────────────────────
+  if (!hasAV && patrimoine > 0) {
+    actions.push({
+      urgence: 'vert', titreGenerique: 'Assurance-vie',
+      titre: 'Ouvrir une assurance-vie — 152 500€ hors succession par bénéficiaire',
+      description: "L'assurance-vie est le levier successoral le plus puissant en France. Les sommes versées avant 70 ans sortent hors succession : 152 500€ exonérés par bénéficiaire désigné. La clause bénéficiaire, rédigée sur mesure, peut protéger un concubin, équilibrer entre enfants, ou favoriser un proche.",
+      economieLabel: "152 500€/bénéficiaire transmissibles hors succession", economie: 0, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois',
+      etapes: [
+        "Ouvrir un contrat multisupport chez un assureur sérieux (Linxea, Boursorama Vie, Suravenir)",
+        "Rédiger une clause bénéficiaire sur mesure — éviter la clause standard 'mon conjoint, à défaut mes enfants'",
+        "Alimenter avant 70 ans pour bénéficier du plein abattement de 152 500€",
+        "Réviser la clause à chaque changement de situation familiale (mariage, divorce, naissance)"
+      ],
+      partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
+    });
   }
+
+  // ── Fallback si aucune action spécifique ─────────────────────────────────
   if (actions.length === 0) {
-    actions.push({ urgence: 'vert', titreGenerique: 'Audit patrimonial', titre: 'Affiner votre profil patrimonial', description: 'Pour des recommandations personnalisées et des calculs précis, complétez votre profil en répondant à davantage de questions lors de l\'onboarding. Plus votre situation est détaillée, plus le plan d\'action sera ciblé et actionnable.', economieLabel: 'Recommandations sur mesure', economie: 0, coutLabel: 'Gratuit', cout: 0, delai: 'Dès maintenant', etapes: null, partenaire: null });
+    actions.push({
+      urgence: 'vert', titreGenerique: 'Bilan patrimonial',
+      titre: 'Planifier un bilan patrimonial annuel',
+      description: "Votre situation ne présente pas de signal d'alerte immédiat. Un bilan patrimonial annuel avec un conseiller permet d'anticiper les évolutions législatives, les changements de situation familiale ou professionnelle, et d'adapter votre stratégie en continu.",
+      economieLabel: 'Stratégie patrimoniale proactive', economie: 0, coutLabel: '~500€/an (CGP)', cout: 500, delai: '< 6 mois',
+      etapes: null, partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
+    });
   }
-  // Bug #5 : trier par urgence avant de slicer — rouge > orange > vert
-  // pour ne jamais couper une alerte critique au profit d'une action mineure
+
   const ordre = { rouge: 0, orange: 1, vert: 2 };
   actions.sort((a, b) => (ordre[a.urgence] ?? 3) - (ordre[b.urgence] ?? 3));
   return actions.slice(0, 3);
