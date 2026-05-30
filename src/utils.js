@@ -25,14 +25,11 @@ export const filterActifsByPov = (actifs, pov) => {
 };
 
 // Patrimoine total selon POV :
-//   foyer    → somme totale du ménage (valeur de marché complète)
-//   user ctx → valeur de marché complète de chaque actif détenu (pas de division)
-//   démo     → quote-part (division par nombre de co-propriétaires)
+//   foyer → somme totale du ménage (valeur de marché complète)
+//   tout autre POV → quote-part (division par nombre de co-propriétaires)
 export const getPatrimoine = (pov, actifs) => {
   if (pov === 'foyer') return actifs.reduce((s, a) => s + (a.valeur || 0), 0);
   const owned = filterActifsByPov(actifs, pov);
-  if (isUserPov(pov)) return owned.reduce((s, a) => s + (a.valeur || 0), 0);
-  // Démo : division par co-propriétaires
   return owned.reduce((s, a) => s + (a.valeur || 0) / Math.max(1, (a.proprietaires?.length || 1)), 0);
 };
 
