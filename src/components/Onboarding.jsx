@@ -305,7 +305,7 @@ const FORM_INIT = {
   gp_maternels_age: '',
   gp_paternels: '',        // 'les_deux' | 'un' | 'non'
   gp_paternels_age: '',
-  patrimoine: '', patrimoine_detail: {}, evenement: '', focus: '',
+  patrimoine: '', patrimoine_scope: '', patrimoine_detail: {}, evenement: '', focus: '',
   // Focus A
   parents_patrimoine: '', parents_compo: [], gp_patrimoine: '', donations_recues: '',
   oncles_tantes_maternels: '', oncles_tantes_paternels: '',
@@ -353,7 +353,7 @@ const buildContextMessage = (f) => {
     f.gp_paternels
       ? `Grands-parents paternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_paternels]}${f.gp_paternels !== 'non' && f.gp_paternels_age ? ` — âge estimé : ${f.gp_paternels_age}` : ''}`
       : null,
-    patriLabel ? `Patrimoine estimé (tous actifs) : ${patriLabel}` : null,
+    patriLabel ? `Patrimoine estimé${f.patrimoine_scope === 'foyer' ? ' du foyer' : f.patrimoine_scope === 'perso' ? ' personnel' : ''} : ${patriLabel}` : null,
     ...(Object.entries(form.patrimoine_detail || {}).map(([key, v]) => {
       const labels = { rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne/Placements', entreprise: 'Entreprise', etranger: 'Bien étranger' };
       return v?.valeur ? `  → ${labels[key] || key} : ${parseInt(v.valeur).toLocaleString('fr-FR')} €` : `  → ${labels[key] || key} : montant à préciser`;
@@ -779,7 +779,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
   const hasSavedConversation = savedMessages && savedMessages.length > 4;
 
   // Helpers formulaire
-  const totalSteps = form.focus ? 5 : 4; // étape 5 = sous-formulaire focus
+  const totalSteps = 5; // toujours 5 étapes — étape 5 = sous-formulaire par focus
   const stepTitles = ['Vous', 'Votre famille', 'Votre situation', 'Votre priorité', { A: 'La transmission à recevoir', B: 'Ce que vous transmettrez', C: 'Votre situation fiscale' }[form.focus] || 'Précisions'];
   const canAdvance = () => {
     if (formStep === 1) return form.prenom.trim().length > 0;
@@ -1177,8 +1177,19 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                 ))}
                 {/* Patrimoine */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 4 }}>Votre patrimoine total estimé</label>
-                  <p style={{ color: '#A8A8B8', fontSize: 12, margin: '0 0 10px' }}>Tous vos actifs — seul ou en couple</p>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Ce patrimoine concerne</label>
+                  {form.situation_civile && form.situation_civile !== 'celibataire' ? (
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                      {[['perso', 'Moi uniquement'], ['foyer', `Moi + ${form.conjoint_prenom || 'mon conjoint(e)'}`]].map(([val, lbl]) => (
+                        <button key={val} onClick={() => setForm(p => ({ ...p, patrimoine_scope: val }))}
+                          style={{ flex: 1, padding: '10px', border: `2px solid ${form.patrimoine_scope === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.patrimoine_scope === val ? '#F0F4FF' : 'white', color: form.patrimoine_scope === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.patrimoine_scope === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ color: '#A8A8B8', fontSize: 12, margin: '0 0 10px' }}>Vos actifs personnels</p>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, patrimoine: val }))}
