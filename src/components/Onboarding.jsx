@@ -218,14 +218,20 @@ const EXTRACTION_PROMPT = `Extrais les données patrimoniales en JSON strict. R�
 
 PRINCIPE : ne JAMAIS renvoyer null/0/vide pour les champs critiques. Si une info manque, ESTIME le plus probable. Un tableau de bord vide est un échec.
 
+RÈGLE ABSOLUE — PROPRIÉTÉ DES ACTIFS :
+Le champ 'actifs' ne contient QUE les biens personnels de l'UTILISATEUR (la personne qui conduit cet audit).
+Si la conversation a abordé les biens des parents, grands-parents, tante, oncle, frère ou sœur — même pour les optimiser — ces biens N'appartiennent PAS à l'utilisateur.
+Mettre le patrimoine des ascendants dans 'famille.patrimoine_parents' et 'famille.patrimoine_gp'.
+Compagne/concubin = conjoint si la conversation le confirme, mais ses actifs propres restent hors 'actifs' sauf si concubinage consolidé explicitement confirmé.
+
 PÉRIMÈTRE PATRIMOINE :
 - Si situation_civile = 'marie' ou 'pacse' : 'actifs' = biens du foyer (user + conjoint). JAMAIS les biens des parents/beaux-parents/fratrie.
-- Si situation_civile = 'concubin' ou 'celibataire' : 'actifs' = UNIQUEMENT les biens propres de l'utilisateur. Ne jamais consolider avec le patrimoine du partenaire, sauf si la conversation confirme explicitement l'accord des deux parties (question S6 répondue positivement).
-- Un héritage attendu n'est PAS un actif actuel. Patrimoine des grands-parents → 'succession.grands_parents_patrimoine_estime'.
+- Si situation_civile = 'concubin' ou 'celibataire' : 'actifs' = UNIQUEMENT les biens propres de l'utilisateur.
+- Un héritage attendu n'est PAS un actif actuel.
 
 {
   "prenom": "prénom user ou 'Vous'",
-  "conjoint": "prénom conjoint ou null",
+  "conjoint": "prénom conjoint/compagne/partenaire ou null",
   "enfants_prenoms": [],
   "enfants": 0,
   "age": 45,
@@ -235,8 +241,22 @@ PÉRIMÈTRE PATRIMOINE :
   "parents_en_vie": true,
   "famille_recomposee": false,
 
-  "focus_principal": "Transmission parentale|Protection du partenaire|Transmission en famille recomposée|Protection des proches & transmission|IFI & optimisation immobilière|Optimisation rémunération & structure|Optimisation fiscale annuelle — focus exact choisi en Phase 2",
-  "focus_audit": "succession|optimisation|les_deux — déduit de focus_principal : Transmission* → succession ; Optimisation* → optimisation ; IFI → succession ; Protection* → succession ; mixte → les_deux",
+  "famille": {
+    "mere_prenom": null,
+    "pere_prenom": null,
+    "parents_en_vie": true,
+    "gp_maternels_vivants": false,
+    "gp_paternels_vivants": false,
+    "fratrie": [{"prenom": "Marie", "lien": "sœur|frère", "handicap": false}],
+    "autres": [{"prenom": "Claire", "lien": "tante|oncle|cousin"}],
+    "patrimoine_parents_estime": 0,
+    "patrimoine_gp_estime": 0,
+    "gp_transmission_organisee": false,
+    "gp_leviers_identifies": []
+  },
+
+  "focus_principal": "Transmission parentale|Protection du partenaire|Transmission en famille recomposée|Protection des proches & transmission|IFI & optimisation immobilière|Optimisation rémunération & structure|Optimisation fiscale annuelle",
+  "focus_audit": "succession|optimisation|les_deux",
 
   "succession": {
     "grands_parents_vivants": false,
