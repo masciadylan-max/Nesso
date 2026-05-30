@@ -360,7 +360,7 @@ export default function App() {
       )}
 
       <main>
-        {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} onRefairAudit={handleGoToOnboarding} />}
+        {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} />}
         {view === 'famille'         && <Famille      pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
         {view === 'actifs'          && <Actifs       pov={pov} actifs={actifs} setActifs={handleSetActifs} userProfile={userProfile} />}
         {view === 'aide'            && <Aide         pov={pov} apiKey={apiKey} actifs={actifs} />}
