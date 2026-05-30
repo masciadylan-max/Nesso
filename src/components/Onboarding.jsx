@@ -354,7 +354,7 @@ const buildContextMessage = (f) => {
       ? `Grands-parents paternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_paternels]}${f.gp_paternels !== 'non' && f.gp_paternels_age ? ` — âge estimé : ${f.gp_paternels_age}` : ''}`
       : null,
     patriLabel ? `Patrimoine estimé${(f.situation_civile && f.situation_civile !== 'celibataire' && f.conjoint_prenom) ? ' du foyer' : ' personnel'} : ${patriLabel}` : null,
-    ...(Object.entries(form.patrimoine_detail || {}).map(([key, v]) => {
+    ...(Object.entries(f.patrimoine_detail || {}).map(([key, v]) => {
       const labels = { rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne/Placements', entreprise: 'Entreprise', etranger: 'Bien étranger' };
       return v?.valeur ? `  → ${labels[key] || key} : ${parseInt(v.valeur).toLocaleString('fr-FR')} €` : `  → ${labels[key] || key} : montant à préciser`;
     })),
