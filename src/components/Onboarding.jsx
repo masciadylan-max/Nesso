@@ -305,7 +305,7 @@ const FORM_INIT = {
   gp_maternels_age: '',
   gp_paternels: '',        // 'les_deux' | 'un' | 'non'
   gp_paternels_age: '',
-  patrimoine: '', evenement: '', focus: '',
+  patrimoine: '', patrimoine_detail: {}, evenement: '', focus: '',
   // Focus A
   parents_patrimoine: '', parents_compo: [], gp_patrimoine: '', donations_recues: '',
   oncles_tantes_maternels: '', oncles_tantes_paternels: '',
@@ -354,6 +354,10 @@ const buildContextMessage = (f) => {
       ? `Grands-parents paternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_paternels]}${f.gp_paternels !== 'non' && f.gp_paternels_age ? ` — âge estimé : ${f.gp_paternels_age}` : ''}`
       : null,
     patriLabel ? `Patrimoine estimé (tous actifs) : ${patriLabel}` : null,
+    ...(Object.entries(form.patrimoine_detail || {}).map(([key, v]) => {
+      const labels = { rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne/Placements', entreprise: 'Entreprise', etranger: 'Bien étranger' };
+      return v?.valeur ? `  → ${labels[key] || key} : ${parseInt(v.valeur).toLocaleString('fr-FR')} €` : `  → ${labels[key] || key} : montant à préciser`;
+    })),
     f.evenement?.trim() ? `Événement de vie : ${f.evenement}` : null,
     focusLabel ? `Focus choisi : ${focusLabel}` : null,
     // Focus A
@@ -1173,8 +1177,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                 ))}
                 {/* Patrimoine */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 4 }}>Votre patrimoine estimé</label>
-                  <p style={{ color: '#A8A8B8', fontSize: 12, margin: '0 0 10px' }}>Tous vos actifs — seul ou en couple (immobilier, épargne, entreprise…)</p>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 4 }}>Votre patrimoine total estimé</label>
+                  <p style={{ color: '#A8A8B8', fontSize: 12, margin: '0 0 10px' }}>Tous vos actifs — seul ou en couple</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, patrimoine: val }))}
@@ -1184,6 +1188,40 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                     ))}
                   </div>
                 </div>
+                {/* Composition du patrimoine */}
+                {form.patrimoine && (
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#A8A8B8' }}>(sélectionnez ce qui s'applique)</span></label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {[
+                        { key: 'rp',       label: '🏠 Résidence principale',     placeholder: 'Valeur estimée (€)' },
+                        { key: 'locatif',  label: '🏢 Immobilier locatif',        placeholder: 'Valeur estimée (€)' },
+                        { key: 'financier',label: '💰 Épargne / Placements',      placeholder: 'Montant total (€)' },
+                        { key: 'entreprise',label:'⚙ Entreprise / Parts sociales', placeholder: 'Valeur estimée (€)' },
+                        { key: 'etranger', label: '🌍 Bien à l\'étranger',         placeholder: 'Valeur estimée (€)' },
+                      ].map(({ key, label, placeholder }) => {
+                        const entry = (form.patrimoine_detail || {})[key];
+                        const active = !!entry;
+                        return (
+                          <div key={key}>
+                            <button onClick={() => setForm(p => {
+                              const d = { ...(p.patrimoine_detail || {}) };
+                              if (d[key]) delete d[key]; else d[key] = { valeur: '' };
+                              return { ...p, patrimoine_detail: d };
+                            })} style={{ width: '100%', padding: '10px 14px', border: `2px solid ${active ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: active ? '#F0F4FF' : 'white', color: active ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              {label} {active && <span style={{ color: '#C9A96E' }}>✓</span>}
+                            </button>
+                            {active && (
+                              <input type="number" placeholder={placeholder} value={entry.valeur || ''}
+                                onChange={e => setForm(p => ({ ...p, patrimoine_detail: { ...(p.patrimoine_detail || {}), [key]: { valeur: e.target.value } } }))}
+                                style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: '0 0 8px 8px', borderTop: 'none', padding: '9px 14px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box', marginTop: -2 }} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {/* Événement */}
                 <div>
                   <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
