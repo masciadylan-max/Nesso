@@ -46,7 +46,9 @@ export default function Actifs({ pov, actifs, setActifs, userProfile }) {
 
   const addActif = () => {
     if (!form.nom.trim() || !form.valeur) return;
-    const newActif = { id: Date.now(), ...form, valeur: parseInt(form.valeur), proprietaires: [pov], credit: false, beneficiaire: null };
+    // 'foyer' n'est pas un propriétaire valide → ramener à ['user','conjoint'] si POV foyer, sinon [pov]
+    const newProprietaires = pov === 'foyer' ? ['user', 'conjoint'] : [pov];
+    const newActif = { id: Date.now(), ...form, valeur: parseInt(form.valeur), proprietaires: newProprietaires, credit: false, beneficiaire: null };
     const updated = [...actifs, newActif];
     setActifs(updated);
     try { localStorage.setItem('nesso_user_actifs', JSON.stringify(updated)); } catch {}
