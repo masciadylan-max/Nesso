@@ -314,6 +314,7 @@ const FORM_INIT = {
   // Focus A
   parents_patrimoine: '', parents_compo: [], gp_patrimoine: '', donations_recues: '',
   oncles_tantes_maternels: '', oncles_tantes_paternels: '',
+  fratrie: '',
   // Focus B
   testament: '', av_existante: '', actifs_type: [],
   // Focus C
@@ -372,6 +373,7 @@ const buildContextMessage = (f) => {
     f.focus === 'A' && f.donations_recues ? `Donations déjà reçues : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.donations_recues] || f.donations_recues}` : null,
     f.focus === 'A' && f.oncles_tantes_maternels ? `Oncles/tantes côté maternel : ${f.oncles_tantes_maternels}` : null,
     f.focus === 'A' && f.oncles_tantes_paternels ? `Oncles/tantes côté paternel : ${f.oncles_tantes_paternels}` : null,
+    f.focus === 'A' && f.fratrie !== '' ? `Frères et sœurs de l'utilisateur : ${f.fratrie === '0' ? 'Aucun' : f.fratrie}` : null,
     // Focus B
     f.focus === 'B' && f.testament ? `Testament existant : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.testament] || f.testament}` : null,
     f.focus === 'B' && f.av_existante ? `Assurance-vie : ${{ oui: 'Oui — bénéficiaires à jour', oui_maj: 'Oui — à mettre à jour', non: 'Non' }[f.av_existante] || f.av_existante}` : null,
@@ -1370,6 +1372,18 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                     </div>
                   </div>
                 )}
+                {/* Fratrie */}
+                <div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Vos frères et sœurs <span style={{ color: '#A8A8B8' }}>(pour calculer le partage entre héritiers)</span></label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['0','1','2','3','4+'].map(n => (
+                      <button key={n} onClick={() => setForm(p => ({ ...p, fratrie: n }))}
+                        style={{ flex: 1, padding: '9px 4px', border: `2px solid ${form.fratrie === n ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.fratrie === n ? '#F0F4FF' : 'white', color: form.fratrie === n ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.fratrie === n ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 {/* Donations reçues */}
                 <div>
                   <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous déjà reçu des donations de vos parents ou grands-parents ?</label>

@@ -25,19 +25,56 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
           <p style={{ color: '#7A7A8C', marginTop: 6, fontSize: 14 }}>Basé sur vos réponses lors de l'audit</p>
         </div>
         <div className="card" style={{ padding: 32, marginBottom: 22 }}>
-          {/* Bug #4 : Parents (génération 0) si vivants */}
-          {userProfile.parents_en_vie && (
+          {/* Grands-parents */}
+          {(userProfile.famille?.gp_maternels_vivants || userProfile.famille?.gp_paternels_vivants || userProfile.succession?.grands_parents_vivants) && (
             <>
+              <p style={{ textAlign: 'center', color: '#A8A8B8', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Grands-parents</p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
+                {userProfile.famille?.gp_maternels_vivants && (
+                  <div style={{ textAlign: 'center', minWidth: 90 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#F5F0EA', border: '2px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1B2B4B', fontWeight: 700, fontSize: 15, margin: '0 auto 6px' }}>GM</div>
+                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 12, margin: '0 0 2px' }}>GP maternels</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 10, margin: 0 }}>En vie</p>
+                    {userProfile.famille?.patrimoine_gp_estime > 0 && <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 12, marginTop: 4 }}>{euro(userProfile.famille.patrimoine_gp_estime)}</p>}
+                  </div>
+                )}
+                {userProfile.famille?.gp_paternels_vivants && (
+                  <div style={{ textAlign: 'center', minWidth: 90 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#F5F0EA', border: '2px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1B2B4B', fontWeight: 700, fontSize: 15, margin: '0 auto 6px' }}>GP</div>
+                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 12, margin: '0 0 2px' }}>GP paternels</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 10, margin: 0 }}>En vie</p>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+                <div style={{ width: 2, height: 28, background: '#E8DDD0' }} />
+              </div>
+            </>
+          )}
+          {/* Parents */}
+          {userProfile.parents_en_vie && userProfile.parents_en_vie !== 'non' && (
+            <>
+              <p style={{ textAlign: 'center', color: '#A8A8B8', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Parents</p>
               <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginBottom: 4, flexWrap: 'wrap' }}>
-                {['Père', 'Mère'].map(role => (
-                  <div key={role} style={{ textAlign: 'center', minWidth: 110 }}>
+                {(userProfile.parents_en_vie === 'les_deux' || userProfile.parents_en_vie === 'pere' || userProfile.parents_en_vie === true) && (
+                  <div style={{ textAlign: 'center', minWidth: 110 }}>
                     <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F5F0EA', border: '2px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1B2B4B', fontWeight: 700, fontSize: 18, margin: '0 auto 8px' }}>
-                      {role[0]}
+                      {(userProfile.famille?.pere_prenom || 'P')[0].toUpperCase()}
                     </div>
-                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{role}</p>
+                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{userProfile.famille?.pere_prenom || 'Père'}</p>
                     <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>En vie</p>
                   </div>
-                ))}
+                )}
+                {(userProfile.parents_en_vie === 'les_deux' || userProfile.parents_en_vie === 'mere' || userProfile.parents_en_vie === true) && (
+                  <div style={{ textAlign: 'center', minWidth: 110 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#F5F0EA', border: '2px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1B2B4B', fontWeight: 700, fontSize: 18, margin: '0 auto 8px' }}>
+                      {(userProfile.famille?.mere_prenom || 'M')[0].toUpperCase()}
+                    </div>
+                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{userProfile.famille?.mere_prenom || 'Mère'}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>En vie</p>
+                    {userProfile.famille?.patrimoine_parents_estime > 0 && <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 12, marginTop: 4 }}>{euro(userProfile.famille.patrimoine_parents_estime)}</p>}
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
                 <div style={{ width: 2, height: 32, background: '#C9A96E' }} />
