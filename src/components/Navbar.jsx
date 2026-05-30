@@ -33,7 +33,9 @@ const buildPovOptions = (userProfile) => {
     list.push({ id: `enfant_${i}`, prenom: p })
   );
   // Nesso+ : POV parents / grands-parents (verrouillés, affichés en teaser)
-  if (userProfile.parents_en_vie !== false) {
+  // parents_en_vie peut être true/false (extraction) ou 'les_deux'/'pere'/'mere'/'non' (nouveau formulaire)
+  const parentsVivants = userProfile.parents_en_vie === true || (userProfile.parents_en_vie && userProfile.parents_en_vie !== 'non' && userProfile.parents_en_vie !== false);
+  if (parentsVivants) {
     list.push({ id: 'parents', prenom: '🔒 Mes parents', locked: true });
   }
   if (userProfile.succession?.grands_parents_vivants) {
