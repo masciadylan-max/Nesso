@@ -297,7 +297,7 @@ Mieux vaut une estimation imparfaite qu'un champ vide. Tranche toujours.`;
 // ─── FORMULAIRE DE CADRAGE ───────────────────────────────────────────────────
 const FORM_INIT = {
   prenom: '', age: '', profession: 'salarié', niveau: 'intermediaire',
-  situation_civile: '', regime: 'communaute', conjoint_prenom: '',
+  situation_civile: '', regime: 'communaute', conjoint_prenom: '', conjoint_age: '',
   enfants: '0', enfants_data: [], famille_recomposee: false,
   parents_en_vie: '', parents_age: '', parents_orga: '',
   grands_parents_en_vie: '', gp_age: '',
@@ -329,7 +329,7 @@ const buildContextMessage = (f) => {
       ? `Situation civile : ${situLabel}${f.situation_civile === 'marie' && regimeLabel ? ` — régime ${regimeLabel}` : ''}`
       : null,
     f.situation_civile && f.situation_civile !== 'celibataire' && f.conjoint_prenom
-      ? `Conjoint(e) / partenaire : ${f.conjoint_prenom}` : null,
+      ? `Conjoint(e) / partenaire : ${f.conjoint_prenom}${f.conjoint_age ? `, ${f.conjoint_age} ans` : ''}` : null,
     nbEnfants === 0
       ? 'Enfants : Aucun'
       : `Enfants : ${nbEnfants}${f.famille_recomposee ? ' — famille recomposée' : ''}${enfantsDesc ? ` — ${enfantsDesc}` : ''}`,
@@ -1020,12 +1020,18 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                 {form.situation_civile && form.situation_civile !== 'celibataire' && (
                   <div>
                     <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
-                      Prénom {form.situation_civile === 'marie' ? 'du conjoint(e)' : form.situation_civile === 'pacse' ? 'du/de la partenaire' : 'du compagnon / de la compagne'}
+                      {form.situation_civile === 'marie' ? 'Conjoint(e)' : form.situation_civile === 'pacse' ? 'Partenaire' : 'Compagnon / Compagne'}
                     </label>
-                    <input type="text" value={form.conjoint_prenom}
-                      onChange={e => setForm(p => ({ ...p, conjoint_prenom: e.target.value }))}
-                      placeholder="Marie"
-                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input type="text" value={form.conjoint_prenom}
+                        onChange={e => setForm(p => ({ ...p, conjoint_prenom: e.target.value }))}
+                        placeholder="Prénom"
+                        style={{ flex: 2, border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
+                      <input type="number" value={form.conjoint_age || ''} min="18" max="100"
+                        onChange={e => setForm(p => ({ ...p, conjoint_age: e.target.value }))}
+                        placeholder="Âge"
+                        style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
+                    </div>
                   </div>
                 )}
                 <div>
