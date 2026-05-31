@@ -231,6 +231,8 @@ PÉRIMÈTRE PATRIMOINE :
     "pere_prenom": null,
     "parents_en_vie": true,
     "nb_parents_en_vie": 2,
+    "pere_age": null,
+    "mere_age": null,
     "gp_maternels_vivants": false,
     "gp_paternels_vivants": false,
     "fratrie": [{"prenom": "Marie", "lien": "sœur|frère", "handicap": false}],
@@ -242,6 +244,7 @@ PÉRIMÈTRE PATRIMOINE :
   },
 
 RÈGLE nb_parents_en_vie : compter uniquement les parents BIOLOGIQUES/LÉGAUX en vie au moment de l'audit. Si les deux sont en vie → 2. Si seulement père ou seulement mère → 1. Si aucun → 0. Défaut si non précisé : 1.
+RÈGLE pere_age / mere_age : extraire l'âge du père et de la mère s'il est mentionné dans la conversation (formulaire ou échange). Valeur entière. null si non précisé. Ces âges sont critiques pour les deadlines fiscales (AV avant 70 ans, don familial avant 80 ans).
 
   "focus_principal": "Transmission parentale|Protection du partenaire|Transmission en famille recomposée|Protection des proches & transmission|IFI & optimisation immobilière|Optimisation rémunération & structure|Optimisation fiscale annuelle",
   "focus_audit": "succession|optimisation|les_deux",
@@ -597,6 +600,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
       pere_prenom: null,
       parents_en_vie: out.parents_en_vie ?? true,
       nb_parents_en_vie: 1,
+      pere_age: null,
+      mere_age: null,
       gp_maternels_vivants: false,
       gp_paternels_vivants: false,
       fratrie: [],

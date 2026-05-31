@@ -458,6 +458,211 @@ const generateUserActions = (userProfile, patrimoine) => {
   return actions.slice(0, 3);
 };
 
+// ── Scénarios comparatifs ────────────────────────────────────────────────────
+// 3 scénarios nommés avec calculs réels : statu quo, AV seule, AV + don familial
+const generateScenarios = (userProfile, patrimoine, isFocusA) => {
+  const nbEnfants    = userProfile?.enfants || 0;
+  const fratrie      = userProfile?.famille?.fratrie || [];
+  const nbHeritiers  = Math.max(1, fratrie.length + 1); // user + fratrie
+  const nbParentsEnVie = Math.max(1, userProfile?.famille?.nb_parents_en_vie ?? 1);
+
+  if (isFocusA) {
+    const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
+    if (patrimoineParents === 0) return null;
+
+    // Abattement total disponible = 100k × nbParentsEnVie (chaque parent est indépendant)
+    const abattement = 100000 * nbParentsEnVie;
+    const partUser   = Math.round(patrimoineParents / nbHeritiers);
+
+    // Scénario 1 — Statu quo
+    const droits1 = calcDroitsBareme(Math.max(0, partUser - abattement));
+
+    // Scénario 2 — AV des parents (152 500€/bénéficiaire hors succession si versé avant 70 ans)
+    const avParents = Math.min(patrimoineParents * 0.30, 152500);
+    const part2     = Math.round(Math.max(0, patrimoineParents - avParents) / nbHeritiers);
+    const droits2   = calcDroitsBareme(Math.max(0, part2 - abattement));
+
+    // Scénario 3 — AV + don familial 31 865€/enfant cumulable si donateur < 80 ans
+    const donFamilial = 31865 * nbParentsEnVie; // par enfant, cumulé sur les deux parents
+    const part3 = Math.round(Math.max(0, patrimoineParents - avParents - donFamilial) / nbHeritiers);
+    const droits3 = calcDroitsBareme(Math.max(0, part3 - abattement));
+
+    return [
+      {
+        nom: 'Statu quo',
+        droits: droits1,
+        economie: 0,
+        description: `Aucune action. Votre part estimée : ${euro(partUser)}. Abattement disponible : ${euro(abattement)} (${nbParentsEnVie} parent${nbParentsEnVie > 1 ? 's' : ''} × 100 000€).`,
+        leviers: [],
+        highlight: false,
+      },
+      {
+        nom: 'Assurance-vie des parents',
+        droits: droits2,
+        economie: Math.max(0, droits1 - droits2),
+        description: `Vos parents alimentent leur assurance-vie avant 70 ans. ${euro(avParents)} sortiront hors succession (152 500€ exonérés par bénéficiaire désigné).`,
+        leviers: ['AV des parents avant 70 ans'],
+        highlight: false,
+      },
+      {
+        nom: 'AV + don familial',
+        droits: droits3,
+        economie: Math.max(0, droits1 - droits3),
+        description: `AV + don familial en numéraire (${euro(31865)} par donateur si < 80 ans, cumulable avec les 100 000€ d'abattement). Économie maximale avec les seuls outils disponibles de leur vivant.`,
+        leviers: ['Assurance-vie', `Don familial ${euro(31865)}/donateur`],
+        highlight: true,
+      },
+    ];
+  } else {
+    // Focus B / standard — succession de l'user vers ses enfants/héritiers
+    const baseSuccession = calcBaseSuccession(patrimoine, userProfile?.actifs);
+    if (baseSuccession === 0 || nbEnfants === 0) return null;
+
+    const partParEnfant = Math.round(baseSuccession / nbEnfants);
+
+    // Scénario 1 — Statu quo
+    const droits1 = calcDroitsBareme(Math.max(0, partParEnfant - 100000)) * nbEnfants;
+
+    // Scénario 2 — Avec AV (152 500€/bénéficiaire hors succession)
+    const avCapacite = Math.min(baseSuccession * 0.35, 152500 * nbEnfants);
+    const masse2     = Math.max(0, baseSuccession - avCapacite);
+    const part2      = Math.round(masse2 / nbEnfants);
+    const droits2    = calcDroitsBareme(Math.max(0, part2 - 100000)) * nbEnfants;
+
+    // Scénario 3 — AV + don familial (31 865€/enfant, si user < 80 ans)
+    const donFamilial = 31865 * nbEnfants;
+    const masse3  = Math.max(0, baseSuccession - avCapacite - donFamilial);
+    const part3   = Math.round(masse3 / nbEnfants);
+    const droits3 = calcDroitsBareme(Math.max(0, part3 - 100000)) * nbEnfants;
+
+    return [
+      {
+        nom: 'Statu quo',
+        droits: droits1,
+        economie: 0,
+        description: `${nbEnfants} enfant${nbEnfants > 1 ? 's' : ''}, abattement 100 000€/enfant. Base taxable par enfant : ${euro(Math.max(0, partParEnfant - 100000))}.`,
+        leviers: [],
+        highlight: false,
+      },
+      {
+        nom: 'Avec assurance-vie',
+        droits: droits2,
+        economie: Math.max(0, droits1 - droits2),
+        description: `152 500€ par bénéficiaire passent hors succession. La base taxable est réduite de ${euro(avCapacite)} grâce à l'AV.`,
+        leviers: [`AV — 152 500€ × ${nbEnfants} enfant${nbEnfants > 1 ? 's' : ''}`],
+        highlight: false,
+      },
+      {
+        nom: 'AV + don familial',
+        droits: droits3,
+        economie: Math.max(0, droits1 - droits3),
+        description: `AV + don familial (${euro(31865)}/enfant si vous avez moins de 80 ans), cumulable avec les 100 000€ d'abattement de droit commun.`,
+        leviers: ['Assurance-vie', `Don familial ${euro(31865)}/enfant`],
+        highlight: true,
+      },
+    ];
+  }
+};
+
+// ── Calendrier patrimonial ───────────────────────────────────────────────────
+// Actions time-sensitive avec deadlines réelles (AV avant 70, don familial avant 80,
+// PER avant 31/12, renouvellement abattement 15 ans)
+const generateTimeline = (userProfile) => {
+  const items  = [];
+  const now    = new Date().getFullYear();
+  const userAge  = userProfile?.age || 45;
+  const pereAge  = userProfile?.famille?.pere_age || null;
+  const mereAge  = userProfile?.famille?.mere_age || null;
+  const tmiNum   = parseInt(userProfile?.optimisation?.tmi) || 0;
+  const revenus  = userProfile?.optimisation?.revenus_annuels_foyer || 0;
+  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
+  const perOuvert   = dispositifs.some(d => d.toLowerCase().includes('per'));
+  const hasAV       = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
+  const donationsPassees = userProfile?.succession?.donations_passees || [];
+
+  // 1. AV de l'utilisateur — alimenter avant 70 ans
+  const anneeAV70User = now + Math.max(0, 70 - userAge);
+  if (userAge < 70) {
+    const restant = 70 - userAge;
+    items.push({
+      annee: anneeAV70User,
+      label: `Avant ${anneeAV70User}`,
+      urgence: restant <= 3 ? 'rouge' : restant <= 8 ? 'orange' : 'vert',
+      titre: hasAV ? 'Alimenter votre assurance-vie avant 70 ans' : 'Ouvrir et alimenter une assurance-vie avant 70 ans',
+      description: `Avant 70 ans : 152 500€ exonérés par bénéficiaire. Après 70 ans : abattement global réduit à 30 500€ pour tous bénéficiaires confondus. ${restant <= 3 ? '⚠ Fenêtre fiscale très proche.' : `Il vous reste ${restant} ans.`}`,
+      type: 'deadline_fiscale',
+    });
+  }
+
+  // 2. PER — avant 31 décembre de l'année en cours
+  if (!perOuvert && tmiNum >= 30 && revenus > 0) {
+    const economiePER = Math.round(Math.min(revenus * 0.10, 10000) * (tmiNum / 100));
+    items.push({
+      annee: now,
+      label: `31 décembre ${now}`,
+      urgence: 'orange',
+      titre: `Ouvrir et alimenter un PER — ${euro(economiePER)} d'impôt en moins`,
+      description: `Les versements sont déductibles du revenu imposable de l'année en cours. À ${tmiNum}% de TMI, 10 000€ versés = ${euro(economiePER)} d'économies sur votre prochaine déclaration. Délai strict : 31 décembre.`,
+      type: 'deadline_fiscale',
+    });
+  }
+
+  // 3. AV des parents — alimenter avant 70 ans (chaque parent)
+  [['père', pereAge], ['mère', mereAge]].forEach(([parent, age]) => {
+    if (!age || age >= 70) return;
+    const restant = 70 - age;
+    const annee = now + restant;
+    items.push({
+      annee,
+      label: `Avant ${annee} (${parent} actuellement ${age} ans)`,
+      urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
+      titre: `Assurance-vie de votre ${parent} — alimenter avant ses 70 ans`,
+      description: `Les primes versées par votre ${parent} avant 70 ans bénéficient de l'abattement de 152 500€ par bénéficiaire désigné. C'est l'un des leviers les plus puissants pour une transmission hors succession. ${restant <= 3 ? `⚠ Urgence : ${restant} an${restant > 1 ? 's' : ''} seulement.` : `Il reste ${restant} ans.`}`,
+      type: 'deadline_fiscale',
+    });
+  });
+
+  // 4. Don familial — avant 80 ans du donateur
+  [['père', pereAge], ['mère', mereAge]].forEach(([parent, age]) => {
+    if (!age || age >= 80) return;
+    const restant = 80 - age;
+    const annee = now + restant;
+    items.push({
+      annee,
+      label: `Avant ${annee} (${parent} actuellement ${age} ans)`,
+      urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
+      titre: `Don familial de votre ${parent} — avant ses 80 ans`,
+      description: `Votre ${parent} peut donner 31 865€ en numéraire, sans droits, cumulable avec les 100 000€ d'abattement standard. Après 80 ans, ce mécanisme n'est plus disponible. ${restant <= 3 ? `⚠ Urgence : ${restant} an${restant > 1 ? 's' : ''} seulement.` : ''}`,
+      type: 'deadline_fiscale',
+    });
+  });
+
+  // 5. Renouvellement abattement 15 ans (donations passées)
+  donationsPassees.forEach(d => {
+    if (!d.annee) return;
+    const anneeRenouvellement = d.annee + 15;
+    if (anneeRenouvellement < now || anneeRenouvellement > now + 12) return;
+    const ans = anneeRenouvellement - now;
+    items.push({
+      annee: anneeRenouvellement,
+      label: `${anneeRenouvellement}${ans > 0 ? ` (dans ${ans} an${ans > 1 ? 's' : ''})` : ' (cette année)'}`,
+      urgence: ans <= 1 ? 'orange' : 'vert',
+      titre: `Abattement de 100 000€ renouvelé — fenêtre fiscale en ${anneeRenouvellement}`,
+      description: `La donation reçue en ${d.annee} a consommé votre abattement de 100 000€. Il se renouvelle intégralement en ${anneeRenouvellement}. Une nouvelle donation sans droits sera de nouveau possible — à anticiper avec le donateur.`,
+      type: 'renouvellement',
+    });
+  });
+
+  // Tri : urgence d'abord, puis chronologique
+  const ordreUrgence = { rouge: 0, orange: 1, vert: 2 };
+  items.sort((a, b) => {
+    const du = (ordreUrgence[a.urgence] ?? 3) - (ordreUrgence[b.urgence] ?? 3);
+    return du !== 0 ? du : a.annee - b.annee;
+  });
+
+  return items;
+};
+
 export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   // Ouvre le bon onglet selon le focus choisi par l'user en Phase 2 de l'audit
   const initialTab = userProfile?.focus_audit === 'optimisation' ? 'optimisation' : 'succession';
@@ -574,6 +779,10 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   // Total toutes économies identifiées (succession + actions chiffrées)
   const totalEconomiesActions = actions.reduce((sum, a) => sum + (a.economie > 0 ? a.economie : 0), 0);
   const totalEconomies = Math.max(calculs.economieSuccession, totalEconomiesActions);
+
+  // Scénarios comparatifs + calendrier (uniquement POV user, si données suffisantes)
+  const scenarios  = isUserPov ? generateScenarios(userProfileForPov, patrimoine, isFocusA) : null;
+  const timeline   = isUserPov ? generateTimeline(userProfileForPov) : [];
 
   // Freemium — hardcodé false en V1, à connecter au vrai état d'abonnement
   const isNessoPlus = false;
@@ -923,6 +1132,111 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
           ))}
         </div>
       </div>
+
+      {/* ── Scénarios comparatifs ── */}
+      {scenarios && scenarios.length === 3 && (
+        <div className="card" style={{ padding: 28, marginTop: 24 }}>
+          <div style={{ marginBottom: 20 }}>
+            <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 4px' }}>Scénarios comparatifs</h2>
+            <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0 }}>
+              {isFocusA ? 'Droits à régler selon le niveau d\'organisation de vos parents' : 'Droits de succession selon vos actions'}
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            {scenarios.map((s, i) => {
+              const isHighlight = s.highlight;
+              const economieRelative = i === 0 ? null : Math.max(0, scenarios[0].droits - s.droits);
+              return (
+                <div key={s.nom} style={{
+                  background: isHighlight ? 'linear-gradient(135deg, #FFFDF9 0%, #FFF8EE 100%)' : '#F9FAFB',
+                  border: isHighlight ? '1px solid #FDE8C8' : '1px solid #F0EBE4',
+                  borderRadius: 12, padding: 22, position: 'relative',
+                  boxShadow: isHighlight ? '0 2px 12px rgba(201,169,110,0.12)' : 'none',
+                }}>
+                  {isHighlight && (
+                    <span style={{ position: 'absolute', top: -10, right: 14, background: '#C9A96E', color: 'white', fontSize: 10, fontWeight: 700, padding: '2px 10px', borderRadius: 20, letterSpacing: '0.06em' }}>
+                      OPTIMISÉ
+                    </span>
+                  )}
+                  <p style={{ color: isHighlight ? '#B8895A' : '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 10px' }}>
+                    Scénario {i + 1}
+                  </p>
+                  <p style={{ color: '#1B2B4B', fontSize: 16, fontWeight: 700, margin: '0 0 4px' }}>{s.nom}</p>
+                  {loading ? <Skeleton h={32} /> : (
+                    <p className="font-serif" style={{ color: i === 0 ? '#E24B4A' : '#10B981', fontSize: 30, fontWeight: 700, margin: '0 0 6px' }}>
+                      {euro(s.droits)}
+                    </p>
+                  )}
+                  {economieRelative !== null && economieRelative > 0 && (
+                    <p style={{ color: '#C9A96E', fontSize: 13, fontWeight: 600, margin: '0 0 10px' }}>
+                      − {euro(economieRelative)} vs statu quo
+                    </p>
+                  )}
+                  {economieRelative === null && (
+                    <p style={{ color: '#7A7A8C', fontSize: 12, margin: '0 0 10px' }}>Référence</p>
+                  )}
+                  <p style={{ color: '#6B7280', fontSize: 12, lineHeight: 1.55, margin: '0 0 12px' }}>{s.description}</p>
+                  {s.leviers.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {s.leviers.map(l => (
+                        <span key={l} style={{ color: '#10B981', fontSize: 11, fontWeight: 500 }}>✓ {l}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Calendrier patrimonial ── */}
+      {timeline.length > 0 && (
+        <div className="card" style={{ padding: 28, marginTop: 24 }}>
+          <div style={{ marginBottom: 20 }}>
+            <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 4px' }}>Calendrier patrimonial</h2>
+            <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0 }}>
+              Actions time-sensitive — les opportunités fiscales ont des dates d'expiration
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {timeline.map((item, i) => {
+              const urgenceColor  = item.urgence === 'rouge' ? '#E24B4A' : item.urgence === 'orange' ? '#F59E0B' : '#10B981';
+              const urgenceBg     = item.urgence === 'rouge' ? '#FEF2F2' : item.urgence === 'orange' ? '#FFFBEB' : '#F0FDF4';
+              const urgenceLabel  = item.urgence === 'rouge' ? 'Urgent' : item.urgence === 'orange' ? 'À planifier' : 'Fenêtre ouverte';
+              const typeIcon      = item.type === 'renouvellement' ? '🔄' : '📅';
+              const isLast        = i === timeline.length - 1;
+              return (
+                <div key={i} style={{ display: 'flex', gap: 16, paddingBottom: isLast ? 0 : 20 }}>
+                  {/* Ligne verticale + point */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 20 }}>
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: urgenceColor, flexShrink: 0, marginTop: 3 }} />
+                    {!isLast && <div style={{ width: 2, flex: 1, background: '#F0EBE4', marginTop: 4, borderRadius: 1 }} />}
+                  </div>
+                  {/* Contenu */}
+                  <div style={{ flex: 1, paddingBottom: isLast ? 0 : 4 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <span style={{ fontSize: 15 }}>{typeIcon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
+                          <span style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14 }}>{item.titre}</span>
+                          <span style={{ background: urgenceBg, color: urgenceColor, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+                            {urgenceLabel}
+                          </span>
+                        </div>
+                        <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, margin: '0 0 4px', letterSpacing: '0.04em' }}>
+                          ⏱ {item.label}
+                        </p>
+                        <p style={{ color: '#6B7280', fontSize: 13, lineHeight: 1.55, margin: 0 }}>{item.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Nesso+ ── */}
       <Modal open={showNessoPlus} onClose={() => setShowNessoPlus(false)} title="">
