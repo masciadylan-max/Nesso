@@ -518,7 +518,7 @@ const renderText = (text) => {
   );
 };
 
-export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRetourDashboard }) {
+export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
   // auditPhase : 'landing' | 'form' | 'chat'
   const [auditPhase, setAuditPhase] = useState('landing');
   const [form, setForm]             = useState(FORM_INIT);
@@ -532,7 +532,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const isDemoMode = !apiKey;
+  const isDemoMode = false; // proxy Vercel gère la clé côté serveur
 
   const callApi = async (history) => {
     const res = await fetch('/anthropic/v1/messages', {
@@ -869,14 +869,6 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
             <p style={{ color: '#6B7280', lineHeight: 1.75, marginBottom: 28, fontSize: 15 }}>
               Quelques questions pour construire votre tableau de bord personnalisé. <strong>5 à 15 minutes</strong> selon votre situation.
             </p>
-
-            {isDemoMode && (
-              <div style={{ background: '#F0F4FF', border: '1px solid #C7D7FD', borderRadius: 9, padding: 16, marginBottom: 24, textAlign: 'left' }}>
-                <p style={{ color: '#1D4ED8', fontSize: 13, fontWeight: 600, margin: '0 0 4px' }}>Mode démo activé</p>
-                <p style={{ color: '#3B5BDB', fontSize: 12, margin: '0 0 10px' }}>Réponses simulées. Pour activer le vrai Claude :</p>
-                <button onClick={onApiKey} className="btn-navy" style={{ fontSize: 12, padding: '6px 14px' }}>Ajouter ma clé API →</button>
-              </div>
-            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
@@ -1585,14 +1577,9 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>N</div>
                 <div>
                   <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14, margin: 0 }}>Conseiller Nesso</p>
-                  <p style={{ color: '#10B981', fontSize: 11, margin: 0 }}>● {isDemoMode ? 'Mode démo' : 'En ligne'}</p>
+                  <p style={{ color: '#10B981', fontSize: 11, margin: 0 }}>● En ligne</p>
                 </div>
               </div>
-              {isDemoMode && (
-                <button onClick={onApiKey} style={{ background: '#F0F4FF', border: '1px solid #C7D7FD', color: '#1D4ED8', borderRadius: 7, padding: '5px 11px', fontSize: 11, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                  Activer le vrai Claude
-                </button>
-              )}
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>

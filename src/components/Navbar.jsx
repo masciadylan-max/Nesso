@@ -44,7 +44,7 @@ const buildPovOptions = (userProfile) => {
   return list;
 };
 
-export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, onLogout, userEmail, userProfile }) {
+export default function Navbar({ view, setView, pov, setPov, onReset, onLogout, userEmail, userProfile }) {
   // 'Mon compte' uniquement si connecté
   const NAV_ITEMS = userEmail
     ? [...NAV_ITEMS_BASE, { id: 'compte', label: 'Mon compte', icon: '◐' }]
@@ -92,7 +92,6 @@ export default function Navbar({ view, setView, pov, setPov, onApiKey, onReset, 
                 </option>
               ))}
             </select>
-<button onClick={onApiKey} title="Configurer la clé API" style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.55)', borderRadius: 8, padding: '6px 11px', cursor: 'pointer', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }}>⚙</button>
             {userEmail && (
               <div ref={dropdownRef} style={{ position: 'relative' }}>
                 <button onClick={() => setDropdownOpen(o => !o)}

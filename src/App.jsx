@@ -28,25 +28,6 @@ const saveToSupabase = async (userId, { userProfile, actifs, pov }) => {
   });
 };
 
-function ApiKeyModal({ open, onClose, apiKey, setApiKey }) {
-  const [val, setVal] = useState(apiKey || '');
-  const save = () => { localStorage.setItem('nesso_api_key', val); setApiKey(val); onClose(); };
-  return (
-    <Modal open={open} onClose={onClose} title="Clé API Anthropic">
-      <p style={{ color: '#6B7280', fontSize: 14, lineHeight: 1.7, marginBottom: 20 }}>
-        Nécessaire pour activer le vrai Claude dans l'onboarding et le chat. Stockée uniquement dans votre navigateur.
-      </p>
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 7 }}>Votre clé API (sk-ant-...)</label>
-        <input type="password" value={val} onChange={e => setVal(e.target.value)} placeholder="sk-ant-api03-..."
-          style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
-      </div>
-      <button className="btn-navy" onClick={save} style={{ width: '100%' }}>Enregistrer</button>
-      <p style={{ color: '#7A7A8C', fontSize: 11, textAlign: 'center', marginTop: 12 }}>Obtenez votre clé sur <strong>console.anthropic.com</strong></p>
-    </Modal>
-  );
-}
-
 // Bannière "Sauvegardez votre audit" pour les utilisateurs non connectés
 function SaveBanner({ onSave }) {
   return (
@@ -124,15 +105,7 @@ export default function App() {
   const [actifs, setActifs]           = useState(initialActifs || ACTIFS);
   const [userProfile, setUserProfile] = useState(initialProfile);
   const [showAuth, setShowAuth]       = useState(initialRecovery);
-  const [showApiKey, setShowApiKey]   = useState(false);
   const [migrationError, setMigrationError] = useState(null);
-  const [apiKey, setApiKey]           = useState(() => {
-    try {
-      return localStorage.getItem('nesso_api_key') ||
-             import.meta.env.VITE_ANTHROPIC_API_KEY ||
-             (window.location.hostname !== 'localhost' ? 'proxy' : '');
-    } catch { return 'proxy'; }
-  });
 
   // Si l'user est sur la vue 'compte' mais se déconnecte, rediriger vers onboarding
   useEffect(() => {
@@ -313,12 +286,9 @@ export default function App() {
 
         <Onboarding
           onComplete={handleComplete}
-          apiKey={apiKey}
-          onApiKey={() => setShowApiKey(true)}
           onLogin={() => setShowAuth(true)}
           onRetourDashboard={authUser && userProfile ? async () => { await loadUserData(authUser.id); } : null}
         />
-        <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
         {showAuth && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
             onClick={e => { if (e.target === e.currentTarget) setShowAuth(false); }}>
@@ -336,7 +306,6 @@ export default function App() {
       <Navbar
         view={view} setView={_setView}
         pov={pov} setPov={setPov}
-        onApiKey={() => setShowApiKey(true)}
         onReset={handleGoToOnboarding}
         onLogout={authUser ? handleLogout : null}
         userEmail={authUser?.email}
@@ -363,7 +332,7 @@ export default function App() {
         {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} />}
         {view === 'famille'         && <Famille      pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
         {view === 'actifs'          && <Actifs       pov={pov} actifs={actifs} setActifs={handleSetActifs} userProfile={userProfile} />}
-        {view === 'aide'            && <Aide         pov={pov} apiKey={apiKey} actifs={actifs} />}
+        {view === 'aide'            && <Aide         pov={pov} actifs={actifs} />}
         {view === 'compte' && authUser && (
           <Compte authUser={authUser} userProfile={userProfile} onLogout={handleLogout} onView={_setView} onResetData={handleReset} />
         )}
@@ -388,7 +357,6 @@ export default function App() {
         </div>
       )}
 
-      <ApiKeyModal open={showApiKey} onClose={() => setShowApiKey(false)} apiKey={apiKey} setApiKey={setApiKey} />
     </div>
   );
 }

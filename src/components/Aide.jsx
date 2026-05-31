@@ -46,7 +46,7 @@ RÈGLES FISCALES CLÉS :
 - Biens étrangers : Règlement UE 650/2012 — risque double imposition`;
 };
 
-export default function Aide({ pov, apiKey, actifs }) {
+export default function Aide({ pov, actifs }) {
   const person = getPersonne(pov);
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState('');
