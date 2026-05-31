@@ -147,7 +147,7 @@ export default function App() {
         // Ne pas interrompre un audit en cours — SAUF si on vient d'un reset de mot de passe
         // (dans ce cas, l'user est sur 'onboarding' mais a un compte existant à charger)
         const isAuditInProgress = viewRef.current === 'onboarding' && !passwordRecoveryRef.current;
-        if (isAuditInProgress) return;
+        if (isAuditInProgress) { setShowAuth(false); return; }
         setShowAuth(false);
         try {
           const { data } = await supabase.from('user_data').select('*').eq('id', session.user.id).single();
