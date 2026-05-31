@@ -181,6 +181,59 @@ const computeUserCalculs = (patrimoine, userProfile) => {
   };
 };
 
+// ── Calcul succession montante — Focus A (ce que l'user va recevoir) ─────────
+// Raisonne sur le patrimoine des PARENTS (et des GP si présents),
+// pas sur le patrimoine propre de l'utilisateur.
+const computeFocusACalculs = (userProfile) => {
+  const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
+  const patrimoineGP      = userProfile?.famille?.patrimoine_gp_estime || 0;
+  const fratrie           = userProfile?.famille?.fratrie || [];
+  const nbHeritiers       = Math.max(1, fratrie.length + 1); // user + fratrie
+
+  // Abattement par héritier : 100 000€ × nb parents en vie
+  // (chaque parent a son abattement propre, indépendant et renouvelable tous les 15 ans)
+  const nbParentsEnVie  = Math.max(1, userProfile?.famille?.nb_parents_en_vie ?? 1);
+  const abattementTotal = 100000 * nbParentsEnVie; // 100k si 1 parent, 200k si 2
+
+  // Part de l'utilisateur dans la succession parentale (parts égales)
+  const partUser = patrimoineParents > 0 ? Math.round(patrimoineParents / nbHeritiers) : 0;
+
+  // Droits statu quo : part reçue − abattement(s) disponibles
+  const taxableStatuQuo  = Math.max(0, partUser - abattementTotal);
+  const droitsStatusQuo  = calcDroitsBareme(taxableStatuQuo);
+
+  // Droits optimisés :
+  //  • AV des parents (152 500€/bénéficiaire hors succession si versé avant 70 ans)
+  //  • Donation de leur vivant (consomme l'abattement de 100k mais sur valeur actuelle)
+  // Approximation : jusqu'à 30% du patrimoine parents peut passer via AV hors succession
+  const avParentsEstimee = Math.min(patrimoineParents * 0.30, 152500);
+  const masseApresAV     = Math.max(0, patrimoineParents - avParentsEstimee);
+  const partOptimisee    = masseApresAV > 0 ? Math.round(masseApresAV / nbHeritiers) : 0;
+  const taxableOptimise  = Math.max(0, partOptimisee - abattementTotal);
+  const droitsOptimise   = calcDroitsBareme(taxableOptimise);
+
+  // GP : si patrimoine GP connu, calculer les droits du saut de génération potentiel
+  const gpVivants = userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants;
+  const abattementGP     = 31786; // abattement GP→petit-enfant (art. 779 CGI)
+  const taxableGP        = patrimoineGP > 0 ? Math.max(0, Math.round(patrimoineGP / nbHeritiers) - abattementGP) : 0;
+  const droitsGPSiSaut   = patrimoineGP > 0 ? calcDroitsBareme(taxableGP) : 0;
+
+  return {
+    droits: { statusQuo: droitsStatusQuo, optimise: droitsOptimise },
+    economieSuccession: Math.max(0, droitsStatusQuo - droitsOptimise),
+    impots: { IR: 0, IFI: 0, PS: 0, total: 0 },
+    economiesAnnuelles: 0,
+    gainDixAns: 0,
+    score: computeScore(userProfile),
+    successionEstimee: droitsStatusQuo,
+    // Métadonnées Focus A exposées à l'UI
+    focusA: {
+      patrimoineParents, partUser, nbHeritiers, nbParentsEnVie, abattementTotal,
+      patrimoineGP, gpVivants, droitsGPSiSaut,
+    },
+  };
+};
+
 // ── Actions prioritaires — orientées par focus et alertes réelles ────────────
 const generateUserActions = (userProfile, patrimoine) => {
   const actions   = [];
@@ -483,7 +536,15 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   const patrimoine = getPatrimoine(pov, povActifs);
   // computeUserCalculs a besoin du userProfile avec les actifs filtrés pour IFI
   const userProfileForPov = isUserPov ? { ...userProfile, actifs: povActifs } : null;
-  const calculs = isUserPov ? computeUserCalculs(patrimoine, userProfileForPov) : (CALCULS[pov] || CALCULS.lucas);
+
+  // Focus A (Transmission parentale) → calcul sur le patrimoine des parents, pas de l'user
+  const isFocusA = isUserPov
+    && userProfile?.focus_principal === 'Transmission parentale'
+    && (userProfile?.famille?.patrimoine_parents_estime || 0) > 0;
+
+  const calculs = isUserPov
+    ? (isFocusA ? computeFocusACalculs(userProfileForPov) : computeUserCalculs(patrimoine, userProfileForPov))
+    : (CALCULS[pov] || CALCULS.lucas);
   const actions = isUserPov ? generateUserActions(userProfileForPov, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
 
   // Total toutes économies identifiées (succession + actions chiffrées)
@@ -542,8 +603,10 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
             <p style={{ color: '#7A7A8C', fontSize: 14, fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>Montants non précisés —<br/>les recommandations restent valides</p>
           )}
           <div style={{ borderTop: '1px solid #F5F0EA', paddingTop: 12 }}>
-            <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 4 }}>Droit successoral estimé</p>
-            {loading ? <Skeleton h={24} w="55%" /> : patrimoine > 0 ? (
+            <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 4 }}>
+              {isFocusA ? 'Droits à régler — succession parentale' : 'Droit successoral estimé'}
+            </p>
+            {loading ? <Skeleton h={24} w="55%" /> : calculs.successionEstimee > 0 ? (
               <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 20, margin: 0 }}>{euro(calculs.successionEstimee)}</p>
             ) : (
               <p style={{ color: '#D1C4B0', fontSize: 13, margin: 0 }}>À préciser</p>
@@ -611,11 +674,50 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
         <div style={{ padding: 28 }}>
           {tab === 'succession' && (
             <div className="fade-in">
+
+              {/* Bandeau contextuel Focus A */}
+              {isFocusA && calculs.focusA && (
+                <div style={{ background: 'linear-gradient(135deg, #FFFDF9 0%, #FFF8EE 100%)', border: '1px solid #FDE8C8', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+                  <span style={{ color: '#C9A96E', fontSize: 13, fontWeight: 600 }}>⚖ Succession de vos parents</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {[
+                      { label: 'Patrimoine parents estimé', val: euro(calculs.focusA.patrimoineParents) },
+                      { label: 'Votre part', val: `${euro(calculs.focusA.partUser)} (1/${calculs.focusA.nbHeritiers} héritier${calculs.focusA.nbHeritiers > 1 ? 's' : ''})` },
+                      { label: 'Abattement disponible', val: `${euro(calculs.focusA.abattementTotal)} (${calculs.focusA.nbParentsEnVie} parent${calculs.focusA.nbParentsEnVie > 1 ? 's' : ''} × 100 000€)` },
+                    ].map(({ label, val }) => (
+                      <span key={label} style={{ color: '#7A7A8C', fontSize: 12 }}>
+                        <span style={{ color: '#1B2B4B', fontWeight: 600 }}>{val}</span> {label}
+                      </span>
+                    ))}
+                  </div>
+                  {calculs.focusA.gpVivants && calculs.focusA.patrimoineGP > 0 && (
+                    <span style={{ color: '#7A7A8C', fontSize: 12, borderTop: '1px dashed #FDE8C8', paddingTop: 8, width: '100%' }}>
+                      Grands-parents : patrimoine estimé <strong>{euro(calculs.focusA.patrimoineGP)}</strong> — droits si saut de génération direct : <strong style={{ color: '#C9A96E' }}>{euro(calculs.focusA.droitsGPSiSaut)}</strong> (abattement 31 786€/petit-enfant)
+                    </span>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
                 {[
-                  { label: 'Droits estimés — statu quo', val: calculs.droits.statusQuo, bg: '#F9FAFB', color: '#1B2B4B', sub: 'Situation actuelle sans action' },
-                  { label: 'Droits après optimisation', val: calculs.droits.optimise, bg: '#F0FDF4', color: '#10B981', sub: 'Scénario optimisé' },
-                  { label: 'Économie possible', val: calculs.economieSuccession, bg: '#FFF8F0', color: '#C9A96E', sub: 'Avec les actions recommandées', border: '1px solid #FDE8C8' },
+                  {
+                    label: isFocusA ? 'Droits à régler — statu quo' : 'Droits estimés — statu quo',
+                    val: calculs.droits.statusQuo,
+                    bg: '#F9FAFB', color: '#1B2B4B',
+                    sub: isFocusA ? 'Sans optimisation de la transmission parentale' : 'Situation actuelle sans action',
+                  },
+                  {
+                    label: 'Droits après optimisation',
+                    val: calculs.droits.optimise,
+                    bg: '#F0FDF4', color: '#10B981',
+                    sub: isFocusA ? 'Avec AV des parents et donations organisées' : 'Scénario optimisé',
+                  },
+                  {
+                    label: 'Économie possible',
+                    val: calculs.economieSuccession,
+                    bg: '#FFF8F0', color: '#C9A96E',
+                    sub: 'Avec les actions recommandées', border: '1px solid #FDE8C8',
+                  },
                 ].map(({ label, val, bg, color, sub, border }) => (
                   <div key={label} style={{ background: bg, borderRadius: 10, padding: 20, border }}>
                     <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 8 }}>{label}</p>

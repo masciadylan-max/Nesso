@@ -226,6 +226,7 @@ PÉRIMÈTRE PATRIMOINE :
     "mere_prenom": null,
     "pere_prenom": null,
     "parents_en_vie": true,
+    "nb_parents_en_vie": 2,
     "gp_maternels_vivants": false,
     "gp_paternels_vivants": false,
     "fratrie": [{"prenom": "Marie", "lien": "sœur|frère", "handicap": false}],
@@ -235,6 +236,8 @@ PÉRIMÈTRE PATRIMOINE :
     "gp_transmission_organisee": false,
     "gp_leviers_identifies": []
   },
+
+RÈGLE nb_parents_en_vie : compter uniquement les parents BIOLOGIQUES/LÉGAUX en vie au moment de l'audit. Si les deux sont en vie → 2. Si seulement père ou seulement mère → 1. Si aucun → 0. Défaut si non précisé : 1.
 
   "focus_principal": "Transmission parentale|Protection du partenaire|Transmission en famille recomposée|Protection des proches & transmission|IFI & optimisation immobilière|Optimisation rémunération & structure|Optimisation fiscale annuelle",
   "focus_audit": "succession|optimisation|les_deux",
@@ -586,6 +589,7 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
       mere_prenom: null,
       pere_prenom: null,
       parents_en_vie: out.parents_en_vie ?? true,
+      nb_parents_en_vie: 1,
       gp_maternels_vivants: false,
       gp_paternels_vivants: false,
       fratrie: [],
@@ -596,6 +600,12 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
       gp_leviers_identifies: [],
       ...(out.famille || {}),
     };
+    // Dériver nb_parents_en_vie si Haiku n'a pas rempli le champ
+    if (!out.famille.nb_parents_en_vie) {
+      const hasMere = !!out.famille.mere_prenom;
+      const hasPere = !!out.famille.pere_prenom;
+      out.famille.nb_parents_en_vie = (hasMere && hasPere) ? 2 : (hasMere || hasPere || out.parents_en_vie) ? 1 : 0;
+    }
     out.succession = {
       grands_parents_vivants: false,
       grands_parents_patrimoine_estime: 0,
