@@ -44,6 +44,31 @@ const calcIFI = (net) => {
   return Math.round(ifi);
 };
 
+// ── Base IFI — immo direct + parts de SCI à prépondérance immobilière ────────
+// Art. 965 CGI : les parts de SCI sont taxables à l'IFI proportionnellement
+// à la fraction immobilière de l'actif net de la SCI.
+const calcBaseIFI = (actifs) => (actifs || []).reduce((sum, a) => {
+  if (a.categorie === 'immobilier') {
+    const abattRP = a.type === 'Résidence principale' ? 0.30 : 0;
+    return sum + (a.valeur || 0) * (1 - abattRP);
+  }
+  if (a.categorie === 'sci') {
+    const ratio = typeof a.sci_immo_ratio === 'number' ? a.sci_immo_ratio : 0.9;
+    return sum + (a.valeur || 0) * ratio;
+  }
+  return sum;
+}, 0);
+
+// ── Base de succession — applique la décote d'illiquidité sur les parts de SCI
+// Le fisc accepte 10–15% de décote (illiquidité + contraintes statutaires).
+// On retient 15% par prudence (conservative côté client = avantage réel).
+const calcBaseSuccession = (patrimoine, actifs) => {
+  const sciDecote = (actifs || [])
+    .filter(a => a.categorie === 'sci')
+    .reduce((sum, a) => sum + Math.round((a.valeur || 0) * 0.15), 0);
+  return Math.max(0, patrimoine - sciDecote);
+};
+
 // ── Score de risque successoral — calculé sur les vrais signaux ─────────────
 const computeScore = (userProfile) => {
   let score = 15; // baseline : toute situation non suivie comporte un risque résiduel
@@ -71,19 +96,22 @@ const computeUserCalculs = (patrimoine, userProfile) => {
   const nbEnfants = userProfile?.enfants || 0;
   const situation  = userProfile?.situation_civile || '';
 
+  // Base de succession après décote SCI (parts de SCI taxées sur 85% de leur valeur)
+  const baseSuccession = calcBaseSuccession(patrimoine, userProfile?.actifs);
+
   // Droits de succession — ligne directe (art. 779 + 777 CGI)
   let droitsStatusQuo = 0;
   let droitsOptimise  = 0;
 
   if (nbEnfants > 0) {
     // Abattement 100 000€ par enfant — parts égales entre héritiers
-    const partParEnfant      = Math.round(patrimoine / nbEnfants);
+    const partParEnfant      = Math.round(baseSuccession / nbEnfants);
     const taxableParEnfant   = Math.max(0, partParEnfant - 100000);
     droitsStatusQuo          = calcDroitsBareme(taxableParEnfant) * nbEnfants;
 
     // Optimisé : assurance-vie hors succession (152 500€/bénéficiaire) réduit la masse taxable
-    const avHorsSuccession   = Math.min(patrimoine * 0.35, 152500 * nbEnfants);
-    const masseApresAV       = Math.max(0, patrimoine - avHorsSuccession);
+    const avHorsSuccession   = Math.min(baseSuccession * 0.35, 152500 * nbEnfants);
+    const masseApresAV       = Math.max(0, baseSuccession - avHorsSuccession);
     const partOptimisee      = Math.round(masseApresAV / nbEnfants);
     const taxableOptimise    = Math.max(0, partOptimisee - 100000);
     droitsOptimise           = calcDroitsBareme(taxableOptimise) * nbEnfants;
@@ -93,7 +121,7 @@ const computeUserCalculs = (patrimoine, userProfile) => {
     // Sans testament pour PACS : succession aux parents (abattement 100k chacun, ligne directe)
     const parentsEnVie = userProfile?.parents_en_vie;
     if (situation === 'pacse' && !userProfile?.succession?.testament_existant && parentsEnVie) {
-      const partParParent = Math.round(patrimoine / 2);
+      const partParParent = Math.round(baseSuccession / 2);
       droitsStatusQuo     = calcDroitsBareme(Math.max(0, partParParent - 100000)) * 2;
       droitsOptimise      = Math.round(droitsStatusQuo * 0.5);
     }
@@ -103,12 +131,12 @@ const computeUserCalculs = (patrimoine, userProfile) => {
     const parentsEnVie = userProfile?.parents_en_vie;
     if (parentsEnVie) {
       // Succession aux parents : ligne directe ascendante, abattement 100k/parent
-      const partParParent = Math.round(patrimoine / 2);
+      const partParParent = Math.round(baseSuccession / 2);
       droitsStatusQuo     = calcDroitsBareme(Math.max(0, partParParent - 100000)) * 2;
     } else {
       // Fratrie : abattement 15 932€, taux 35-45%
       const fratrie       = Math.max(1, (userProfile?.famille?.fratrie || []).length);
-      const partFratrie   = Math.round(patrimoine / fratrie);
+      const partFratrie   = Math.round(baseSuccession / fratrie);
       const taxFratrie    = Math.max(0, partFratrie - 15932);
       const droitFratrie  = taxFratrie <= 24430
         ? Math.round(taxFratrie * 0.35)
@@ -118,12 +146,8 @@ const computeUserCalculs = (patrimoine, userProfile) => {
     droitsOptimise = Math.round(droitsStatusQuo * 0.5); // AV + testament peuvent couvrir ~50%
   }
 
-  // IFI — barème progressif
-  const immoActifs = (userProfile?.actifs || []).filter(a => a.categorie === 'immobilier');
-  const patrimoineImmoNet = immoActifs.reduce((sum, a) => {
-    const abattRP = a.type === 'Résidence principale' ? 0.30 : 0;
-    return sum + (a.valeur || 0) * (1 - abattRP);
-  }, 0);
+  // IFI — barème progressif (immo direct + SCI à prépondérance immobilière)
+  const patrimoineImmoNet = calcBaseIFI(userProfile?.actifs);
   const ifi = calcIFI(patrimoineImmoNet);
 
   // IR estimé — TMI extrait par Haiku ou barème IR 2024
@@ -253,8 +277,8 @@ const generateUserActions = (userProfile, patrimoine) => {
   const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
   const patrimoineGP   = userProfile?.famille?.patrimoine_gp_estime || 0;
   const gpVivants = userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants || userProfile?.succession?.grands_parents_vivants;
-  const immoActifs = (userProfile?.actifs || []).filter(a => a.categorie === 'immobilier');
-  const patrimoineImmoNet = immoActifs.reduce((s, a) => s + (a.valeur || 0) * (a.type === 'Résidence principale' ? 0.70 : 1), 0);
+  // IFI : immo direct + SCI à prépondérance immobilière (source de vérité : calcBaseIFI)
+  const patrimoineImmoNet = calcBaseIFI(userProfile?.actifs);
 
   // ── ALERTES CRITIQUES — rouge, toujours prioritaires ─────────────────────
   // IFI : source de vérité = calcul sur actifs réels (pas l'alerte Haiku qui peut être stale)

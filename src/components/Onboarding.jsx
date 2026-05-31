@@ -87,6 +87,10 @@ Don familial exonéré : jusqu'à 31 865€ en numéraire si donateur < 80 ans, 
 
 SCI (Société Civile Immobilière) :
 Pertinente si : plusieurs biens immobiliers, transmission progressive souhaitée, démembrement de parts (plus souple que démembrement direct du bien). Coût de création et gestion : 1 500–3 000€/an. Pas pertinente si : 1 seul bien, patrimoine < 300k€ (coût > économie), ou liquidités nécessaires rapidement.
+IFI et SCI : si la SCI est à prépondérance immobilière (> 50% de l'actif = immo), les parts sont soumises à l'IFI proportionnellement à la fraction immobilière des actifs de la SCI (art. 965 CGI). Ne pas oublier de demander la composition si les parts de SCI représentent un montant significatif.
+Succession et SCI : les parts de SCI bénéficient d'une décote d'illiquidité de 10 à 20% sur la valeur vénale des actifs sous-jacents — le fisc accepte généralement 10–15%. Avantage concret : droits calculés sur 85% de la valeur réelle. Signaler cet avantage si la SCI appartient aux parents ou grands-parents.
+Donation de parts de SCI : plus souple que la donation de l'immeuble directement — on peut donner par tranches successives, démembrer les parts (donner la nue-propriété des parts = transmettre la valeur, conserver l'usufruit = conserver les revenus locatifs). Cumulable avec les abattements de droit commun (100k€/enfant).
+Droits de mutation sur cession de parts : 5% (art. 726 CGI), vs 5,09% pour cession d'immeuble directement — avantage marginal mais réel sur les montants élevés.
 
 HOLDING PATRIMONIALE :
 Pertinente si : dirigeant avec dividendes importants (IS holding < IR personnel), réinvestissement des bénéfices, préparation Dutreil. Apport-cession (art. 150-0 B ter) : avant cession de société, apport des titres à une holding → report de la plus-value si réinvestissement 60% dans les 2 ans.
@@ -264,13 +268,16 @@ RÈGLE nb_parents_en_vie : compter uniquement les parents BIOLOGIQUES/LÉGAUX en
   "actifs": [
     {
       "nom": "description courte",
-      "categorie": "immobilier|financier|professionnel|exotique",
+      "categorie": "immobilier|financier|professionnel|sci|exotique",
       "valeur": 250000,
-      "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|Assurance-vie|PEA|PER|Liquidités|Société|Autre",
+      "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|SCI|Assurance-vie|PEA|PER|Liquidités|Société|Autre",
+      "sci_immo_ratio": null,
       "pays": "France",
       "proprietaires": ["user"]
     }
   ],
+
+RÈGLE SCI : si un actif est une SCI, utiliser categorie = 'sci' ET type = 'SCI'. sci_immo_ratio = fraction (0 à 1) de l'actif net de la SCI qui est immobilier. Si composition non connue → estimer 0.9 (SCI typiquement quasi-exclusivement immobilière). Exemple : SCI avec 500k€ d'immo + 50k€ de trésorerie → sci_immo_ratio = 0.91.
 
 RÈGLE PROPRIETAIRES — obligatoire sur chaque actif :
 - ["user"] si l'actif appartient uniquement à l'utilisateur
@@ -660,6 +667,10 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
         categorie: a.categorie || 'financier',
         type: a.type || 'Autre',
         pays: a.pays || 'France',
+        // sci_immo_ratio : défaut 0.9 si SCI sans ratio précisé (quasi-exclusivement immobilière)
+        sci_immo_ratio: a.categorie === 'sci'
+          ? (typeof a.sci_immo_ratio === 'number' ? a.sci_immo_ratio : 0.9)
+          : undefined,
         // Garantit que chaque actif a un tableau proprietaires valide
         // Défaut : ['user'] (l'extraction peut ne pas toujours fournir ce champ)
         proprietaires: Array.isArray(a.proprietaires) && a.proprietaires.length > 0
