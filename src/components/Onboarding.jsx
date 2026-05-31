@@ -401,8 +401,8 @@ const buildContextMessage = (f) => {
 
 // Bug #3 : parsing JSON robuste — gère markdown ```json, texte autour, JSON tronqué
 // Tracker de coût pour un audit (réinitialisé à chaque nouveau démarrage)
-// Tarifs Haiku 4.5 (USD / 1M tokens) — à ajuster si les prix Anthropic changent
-const PRICE = { input: 1.0, cacheRead: 0.10, cacheWrite: 1.25, output: 5.0 };
+// Tarifs Sonnet 4.5 (USD / 1M tokens) — conversation + extraction
+const PRICE = { input: 3.0, cacheRead: 0.30, cacheWrite: 3.75, output: 15.0 };
 let auditCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0, calls: 0 };
 
 const resetAuditCost = () => { auditCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, usd: 0, calls: 0 }; };
@@ -528,8 +528,8 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 500,
+        model: 'claude-sonnet-4-5',
+        max_tokens: 600,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         messages: history.slice(-18).map(m => ({ role: m.role, content: m.content }))
       }),
