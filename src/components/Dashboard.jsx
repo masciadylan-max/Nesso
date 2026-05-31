@@ -69,13 +69,33 @@ const calcBaseSuccession = (patrimoine, actifs) => {
   return Math.max(0, patrimoine - sciDecote);
 };
 
+// ── Barème nue-propriété art. 669 CGI ────────────────────────────────────────
+// Retourne la fraction de la valeur vénale correspondant à la nue-propriété,
+// selon l'âge de l'usufruitier (le parent qui garde l'usufruit).
+const calcTauxNuePropriete = (ageUsufruitier) => {
+  if (!ageUsufruitier || ageUsufruitier < 21) return 0.10;
+  if (ageUsufruitier <= 30) return 0.20;
+  if (ageUsufruitier <= 40) return 0.30;
+  if (ageUsufruitier <= 50) return 0.40;
+  if (ageUsufruitier <= 60) return 0.50;
+  if (ageUsufruitier <= 70) return 0.60;
+  if (ageUsufruitier <= 80) return 0.70;
+  if (ageUsufruitier <= 90) return 0.80;
+  return 0.90;
+};
+
 // ── Score de risque successoral — calculé sur les vrais signaux ─────────────
-const computeScore = (userProfile) => {
+const computeScore = (userProfile, { patrimoine = 0, droitsStatusQuo = 0 } = {}) => {
   let score = 15; // baseline : toute situation non suivie comporte un risque résiduel
-  const alertes = (userProfile?.alertes || []).map(a => a.toLowerCase());
-  const situation = userProfile?.situation_civile || '';
+  const alertes    = (userProfile?.alertes || []).map(a => a.toLowerCase());
+  const situation  = userProfile?.situation_civile || '';
   const testamentExistant = userProfile?.succession?.testament_existant;
-  const hasAV = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
+  const hasAV      = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
+  const userAge    = userProfile?.age || 45;
+  const tmiNum     = parseInt(userProfile?.optimisation?.tmi) || 0;
+  const revenus    = userProfile?.optimisation?.revenus_annuels_foyer || 0;
+  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
+  const perOuvert  = dispositifs.some(d => d.toLowerCase().includes('per'));
 
   // Risques critiques
   if ((situation === 'pacse' && !testamentExistant) || alertes.some(a => a.includes('pacs'))) score += 35;
@@ -87,6 +107,16 @@ const computeScore = (userProfile) => {
   // Risques structurels
   if (situation === 'marie' && (userProfile?.enfants || 0) > 0 && !testamentExistant) score += 10;
   if (!hasAV && (userProfile?.actifs?.length || 0) > 0) score += 10;
+
+  // Fenêtre fiscale AV qui se ferme (avant 70 ans)
+  if (!hasAV && userAge >= 65) score += 15;  // < 5 ans pour agir
+  if (!hasAV && userAge >= 68) score += 10;  // urgence critique
+
+  // PER absent à TMI fort = levier majeur manqué
+  if (!perOuvert && tmiNum >= 41 && revenus > 0) score += 10;
+
+  // Droits successoraux élevés vs patrimoine (sous-assurance successorale)
+  if (patrimoine > 0 && droitsStatusQuo > patrimoine * 0.20) score += 15;
 
   return Math.min(100, score);
 };
@@ -187,11 +217,12 @@ const computeUserCalculs = (patrimoine, userProfile) => {
 
   const totalImpots = ir + ifi + ps;
 
-  // Économie PER potentielle (si TMI ≥ 30% et PER non ouvert)
+  // Économie PER — plafond réel 2024 : 10% du revenu, min 4 114€, max 35 194€
   const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
   const perOuvert   = dispositifs.some(d => d.toLowerCase().includes('per'));
+  const plafondPER  = revenus > 0 ? Math.min(Math.max(revenus * 0.10, 4114), 35194) : 0;
   const economiePER = (!perOuvert && tmiNum >= 30 && revenus > 0)
-    ? Math.round(Math.min(revenus * 0.10, 10000) * (tmiNum / 100))
+    ? Math.round(plafondPER * (tmiNum / 100))
     : 0;
 
   return {
@@ -200,7 +231,7 @@ const computeUserCalculs = (patrimoine, userProfile) => {
     impots: { IR: ir, IFI: ifi, PS: ps, total: totalImpots },
     economiesAnnuelles: economiePER,
     gainDixAns: economiePER * 10,
-    score: computeScore(userProfile),
+    score: computeScore(userProfile, { patrimoine, droitsStatusQuo }),
     successionEstimee: droitsStatusQuo,
   };
 };
@@ -248,7 +279,7 @@ const computeFocusACalculs = (userProfile) => {
     impots: { IR: 0, IFI: 0, PS: 0, total: 0 },
     economiesAnnuelles: 0,
     gainDixAns: 0,
-    score: computeScore(userProfile),
+    score: computeScore(userProfile, { patrimoine: patrimoineParents, droitsStatusQuo }),
     successionEstimee: droitsStatusQuo,
     // Métadonnées Focus A exposées à l'UI
     focusA: {
@@ -425,6 +456,64 @@ const generateUserActions = (userProfile, patrimoine) => {
     }
   }
 
+  // ── Clause bénéficiaire AV — révision si standard ou inconnue ────────────
+  if (hasAV) {
+    const avAssets = (userProfile?.actifs || []).filter(a => a.type === 'Assurance-vie');
+    const hasClauseStandard = avAssets.some(a => a.av_clause === 'standard');
+    // Signal si clause standard ET situation complexe (mariage, famille recomposée, PACS)
+    const situationComplexe = ['marie', 'pacse'].includes(situation) || userProfile?.famille_recomposee;
+    if (hasClauseStandard && situationComplexe) {
+      actions.push({
+        urgence: 'orange', titreGenerique: 'Clause bénéficiaire AV',
+        titre: 'Réviser la clause bénéficiaire de votre assurance-vie',
+        description: "La clause standard 'mon conjoint à défaut mes enfants à parts égales' peut devenir inadaptée après un mariage, une naissance ou un remariage. Une clause sur mesure protège précisément les bonnes personnes — et peut intégrer un démembrement (usufruit conjoint / nue-propriété enfants) pour optimiser la transmission.",
+        economieLabel: 'Protection des bénéficiaires', economie: 0, coutLabel: '~150€ (notaire) ou gratuit (assureur)', cout: 0, delai: '< 1 mois',
+        etapes: [
+          "Demander à l'assureur le texte exact de votre clause bénéficiaire actuelle",
+          "Vérifier l'adéquation avec votre situation familiale (mariage, enfants, remariage)",
+          "Rédiger une clause sur mesure — envisager le démembrement de clause pour famille recomposée",
+          "Réviser à chaque changement de situation (naissance, divorce, remariage)"
+        ],
+        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' }
+      });
+    }
+  }
+
+  // ── Démembrement usufruit/nue-propriété — Focus B, si conditions réunies ──
+  if ((focus === 'succession' || focus === 'les_deux') && nbEnfants > 0) {
+    const userAge  = userProfile?.age || 45;
+    const hasImmoHorsRP = (userProfile?.actifs || []).some(
+      a => a.categorie === 'immobilier' && a.type !== 'Résidence principale'
+    );
+    if (userAge >= 51 && userAge <= 80 && hasImmoHorsRP) {
+      const tauxNP     = calcTauxNuePropriete(userAge);
+      const immoHorsRP = (userProfile?.actifs || [])
+        .filter(a => a.categorie === 'immobilier' && a.type !== 'Résidence principale')
+        .reduce((s, a) => s + (a.valeur || 0), 0);
+      if (immoHorsRP > 150000) {
+        const partParEnfant = Math.round(immoHorsRP / nbEnfants);
+        const droitsSansAction = calcDroitsBareme(Math.max(0, partParEnfant - 100000)) * nbEnfants;
+        const valeurNPParEnfant = Math.round(partParEnfant * tauxNP);
+        const droitsDemembrement = calcDroitsBareme(Math.max(0, valeurNPParEnfant - 100000)) * nbEnfants;
+        const economie = Math.max(0, droitsSansAction - droitsDemembrement);
+        actions.push({
+          urgence: 'orange', titreGenerique: 'Démembrement',
+          titre: `Donation en nue-propriété — droits sur ${Math.round(tauxNP * 100)}% de la valeur`,
+          description: `À ${userAge} ans, la nue-propriété de vos biens immo locatifs vaut ${Math.round(tauxNP * 100)}% de leur valeur (art. 669 CGI). En donnant la NP maintenant (vous gardez l'usufruit = les loyers), les droits ne portent que sur cette valeur réduite. À votre décès, vos enfants récupèrent la pleine propriété sans droits supplémentaires.`,
+          economieLabel: economie > 0 ? `${euro(economie)} vs donation pleine propriété` : `Droits sur ${Math.round(tauxNP * 100)}% de la valeur`,
+          economie, coutLabel: '~600–1 000€ (notaire)', cout: 800, delai: '< 12 mois',
+          etapes: [
+            "Identifier les biens transmissibles en NP (locatif prioritairement — gardez la jouissance de la RP)",
+            `Valoriser la NP : ${Math.round(tauxNP * 100)}% de la valeur vénale (votre âge : ${userAge} ans)`,
+            "Abattement de 100 000€ par enfant s'applique sur la valeur de la NP (pas sur la valeur pleine)",
+            "Anticiper avant une revalorisation du bien — geler la valeur d'assiette aujourd'hui"
+          ],
+          partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' }
+        });
+      }
+    }
+  }
+
   // ── AV — levier universel si non ouvert ──────────────────────────────────
   if (!hasAV && patrimoine > 0) {
     actions.push({
@@ -461,38 +550,78 @@ const generateUserActions = (userProfile, patrimoine) => {
 // ── Scénarios comparatifs ────────────────────────────────────────────────────
 // 3 scénarios nommés avec calculs réels : statu quo, AV seule, AV + don familial
 const generateScenarios = (userProfile, patrimoine, isFocusA) => {
-  const nbEnfants    = userProfile?.enfants || 0;
-  const fratrie      = userProfile?.famille?.fratrie || [];
-  const nbHeritiers  = Math.max(1, fratrie.length + 1); // user + fratrie
+  const nbEnfants      = userProfile?.enfants || 0;
+  const fratrie        = userProfile?.famille?.fratrie || [];
+  const nbHeritiers    = Math.max(1, fratrie.length + 1); // user + fratrie
   const nbParentsEnVie = Math.max(1, userProfile?.famille?.nb_parents_en_vie ?? 1);
+  const now            = new Date().getFullYear();
 
   if (isFocusA) {
     const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
     if (patrimoineParents === 0) return null;
 
-    // Abattement total disponible = 100k × nbParentsEnVie (chaque parent est indépendant)
-    const abattement = 100000 * nbParentsEnVie;
-    const partUser   = Math.round(patrimoineParents / nbHeritiers);
+    // ── Abattement résiduel : déduire les donations récentes (< 15 ans) ───────
+    // "de": "parent", "vers": "user", montant connu → consomme l'abattement
+    const donationsParentsVersUser = (userProfile?.succession?.donations_passees || [])
+      .filter(d => d.de === 'parent' && d.vers === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
+    const montantConsomme  = donationsParentsVersUser.reduce((s, d) => s + (d.montant || 0), 0);
+    const abattementBrut   = 100000 * nbParentsEnVie;
+    const abattement       = Math.max(0, abattementBrut - montantConsomme);
+    const abattementReduit = montantConsomme > 0;
+
+    const partUser = Math.round(patrimoineParents / nbHeritiers);
 
     // Scénario 1 — Statu quo
     const droits1 = calcDroitsBareme(Math.max(0, partUser - abattement));
 
-    // Scénario 2 — AV des parents (152 500€/bénéficiaire hors succession si versé avant 70 ans)
+    // Scénario 2 — AV des parents (152 500€/bénéficiaire hors succession avant 70 ans)
     const avParents = Math.min(patrimoineParents * 0.30, 152500);
     const part2     = Math.round(Math.max(0, patrimoineParents - avParents) / nbHeritiers);
     const droits2   = calcDroitsBareme(Math.max(0, part2 - abattement));
 
-    // Scénario 3 — AV + don familial 31 865€/enfant cumulable si donateur < 80 ans
-    const donFamilial = 31865 * nbParentsEnVie; // par enfant, cumulé sur les deux parents
-    const part3 = Math.round(Math.max(0, patrimoineParents - avParents - donFamilial) / nbHeritiers);
-    const droits3 = calcDroitsBareme(Math.max(0, part3 - abattement));
+    // Scénario 3 — Démembrement (si âge parent favorable) OU AV + don familial
+    const pereAge  = userProfile?.famille?.pere_age;
+    const mereAge  = userProfile?.famille?.mere_age;
+    // Prendre l'âge du parent le plus jeune comme usufruitier potentiel
+    const ageUsufr = (pereAge && mereAge) ? Math.min(pereAge, mereAge) : (pereAge || mereAge || null);
+    const tauxNP   = ageUsufr ? calcTauxNuePropriete(ageUsufr) : null;
+    const useDemembrement = tauxNP !== null && ageUsufr > 50 && ageUsufr <= 80 && patrimoineParents > 200000;
+
+    let scenario3;
+    if (useDemembrement) {
+      // Démembrement : droits calculés sur la valeur de la nue-propriété uniquement
+      const valeurNP  = Math.round(partUser * tauxNP);
+      const droits3   = calcDroitsBareme(Math.max(0, valeurNP - abattement));
+      scenario3 = {
+        nom: 'Donation en nue-propriété',
+        droits: droits3,
+        economie: Math.max(0, droits1 - droits3),
+        description: `À ${ageUsufr} ans, la nue-propriété vaut ${Math.round(tauxNP * 100)}% de la valeur vénale (art. 669 CGI). Vos parents gardent l'usufruit (revenus, usage), vous recevez la NP — droits sur ${euro(valeurNP)} seulement. À leur décès : pleine propriété sans droits supplémentaires.`,
+        leviers: [`NP = ${Math.round(tauxNP * 100)}% (parent ${ageUsufr} ans)`, 'Pleine propriété sans droits au décès'],
+        highlight: true,
+        noteDemembrement: true,
+      };
+    } else {
+      // AV + don familial (levier par défaut)
+      const donFamilial = 31865 * nbParentsEnVie;
+      const part3  = Math.round(Math.max(0, patrimoineParents - avParents - donFamilial) / nbHeritiers);
+      const droits3 = calcDroitsBareme(Math.max(0, part3 - abattement));
+      scenario3 = {
+        nom: 'AV + don familial',
+        droits: droits3,
+        economie: Math.max(0, droits1 - droits3),
+        description: `AV + don familial en numéraire (${euro(31865)} par donateur si < 80 ans, cumulable avec les 100 000€ d'abattement).${abattementReduit ? ` ⚠ Abattement réduit à ${euro(abattement)} (donation antérieure prise en compte).` : ''}`,
+        leviers: ['Assurance-vie', `Don familial ${euro(31865)}/donateur`],
+        highlight: true,
+      };
+    }
 
     return [
       {
         nom: 'Statu quo',
         droits: droits1,
         economie: 0,
-        description: `Aucune action. Votre part estimée : ${euro(partUser)}. Abattement disponible : ${euro(abattement)} (${nbParentsEnVie} parent${nbParentsEnVie > 1 ? 's' : ''} × 100 000€).`,
+        description: `Aucune action. Votre part : ${euro(partUser)}. Abattement : ${euro(abattement)}${abattementReduit ? ` (réduit — donation antérieure de ${euro(montantConsomme)} < 15 ans)` : ` (${nbParentsEnVie} parent${nbParentsEnVie > 1 ? 's' : ''} × 100 000€)`}.`,
         leviers: [],
         highlight: false,
       },
@@ -500,47 +629,49 @@ const generateScenarios = (userProfile, patrimoine, isFocusA) => {
         nom: 'Assurance-vie des parents',
         droits: droits2,
         economie: Math.max(0, droits1 - droits2),
-        description: `Vos parents alimentent leur assurance-vie avant 70 ans. ${euro(avParents)} sortiront hors succession (152 500€ exonérés par bénéficiaire désigné).`,
+        description: `Vos parents alimentent leur AV avant 70 ans — ${euro(avParents)} sortent hors succession (152 500€ exonérés par bénéficiaire désigné).`,
         leviers: ['AV des parents avant 70 ans'],
         highlight: false,
       },
-      {
-        nom: 'AV + don familial',
-        droits: droits3,
-        economie: Math.max(0, droits1 - droits3),
-        description: `AV + don familial en numéraire (${euro(31865)} par donateur si < 80 ans, cumulable avec les 100 000€ d'abattement). Économie maximale avec les seuls outils disponibles de leur vivant.`,
-        leviers: ['Assurance-vie', `Don familial ${euro(31865)}/donateur`],
-        highlight: true,
-      },
+      scenario3,
     ];
+
   } else {
     // Focus B / standard — succession de l'user vers ses enfants/héritiers
     const baseSuccession = calcBaseSuccession(patrimoine, userProfile?.actifs);
     if (baseSuccession === 0 || nbEnfants === 0) return null;
 
+    // ── Abattement résiduel — donations de l'user vers ses enfants < 15 ans ──
+    const donationsUserVersEnfants = (userProfile?.succession?.donations_passees || [])
+      .filter(d => d.de === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
+    const montantConsomme  = donationsUserVersEnfants.reduce((s, d) => s + (d.montant || 0), 0) / Math.max(nbEnfants, 1);
+    const abattementResiduel = Math.max(0, 100000 - montantConsomme);
+    const abattementReduit = montantConsomme > 0;
+
     const partParEnfant = Math.round(baseSuccession / nbEnfants);
 
     // Scénario 1 — Statu quo
-    const droits1 = calcDroitsBareme(Math.max(0, partParEnfant - 100000)) * nbEnfants;
+    const droits1 = calcDroitsBareme(Math.max(0, partParEnfant - abattementResiduel)) * nbEnfants;
 
     // Scénario 2 — Avec AV (152 500€/bénéficiaire hors succession)
     const avCapacite = Math.min(baseSuccession * 0.35, 152500 * nbEnfants);
     const masse2     = Math.max(0, baseSuccession - avCapacite);
     const part2      = Math.round(masse2 / nbEnfants);
-    const droits2    = calcDroitsBareme(Math.max(0, part2 - 100000)) * nbEnfants;
+    const droits2    = calcDroitsBareme(Math.max(0, part2 - abattementResiduel)) * nbEnfants;
 
-    // Scénario 3 — AV + don familial (31 865€/enfant, si user < 80 ans)
-    const donFamilial = 31865 * nbEnfants;
+    // Scénario 3 — AV + don familial (31 865€/enfant si user < 80 ans)
+    const userAge     = userProfile?.age || 45;
+    const donFamilial = userAge < 80 ? 31865 * nbEnfants : 0;
     const masse3  = Math.max(0, baseSuccession - avCapacite - donFamilial);
     const part3   = Math.round(masse3 / nbEnfants);
-    const droits3 = calcDroitsBareme(Math.max(0, part3 - 100000)) * nbEnfants;
+    const droits3 = calcDroitsBareme(Math.max(0, part3 - abattementResiduel)) * nbEnfants;
 
     return [
       {
         nom: 'Statu quo',
         droits: droits1,
         economie: 0,
-        description: `${nbEnfants} enfant${nbEnfants > 1 ? 's' : ''}, abattement 100 000€/enfant. Base taxable par enfant : ${euro(Math.max(0, partParEnfant - 100000))}.`,
+        description: `${nbEnfants} enfant${nbEnfants > 1 ? 's' : ''}, abattement ${euro(abattementResiduel)}/enfant${abattementReduit ? ' (réduit — donation antérieure prise en compte)' : ''}. Base taxable par enfant : ${euro(Math.max(0, partParEnfant - abattementResiduel))}.`,
         leviers: [],
         highlight: false,
       },
@@ -548,16 +679,20 @@ const generateScenarios = (userProfile, patrimoine, isFocusA) => {
         nom: 'Avec assurance-vie',
         droits: droits2,
         economie: Math.max(0, droits1 - droits2),
-        description: `152 500€ par bénéficiaire passent hors succession. La base taxable est réduite de ${euro(avCapacite)} grâce à l'AV.`,
+        description: `152 500€ par bénéficiaire passent hors succession. La base taxable est réduite de ${euro(avCapacite)}.`,
         leviers: [`AV — 152 500€ × ${nbEnfants} enfant${nbEnfants > 1 ? 's' : ''}`],
         highlight: false,
       },
       {
-        nom: 'AV + don familial',
+        nom: userAge < 80 ? 'AV + don familial' : 'AV seule (don familial indisponible)',
         droits: droits3,
         economie: Math.max(0, droits1 - droits3),
-        description: `AV + don familial (${euro(31865)}/enfant si vous avez moins de 80 ans), cumulable avec les 100 000€ d'abattement de droit commun.`,
-        leviers: ['Assurance-vie', `Don familial ${euro(31865)}/enfant`],
+        description: userAge < 80
+          ? `AV + don familial (${euro(31865)}/enfant), cumulable avec les ${euro(abattementResiduel)} d'abattement disponible.`
+          : `Le don familial n'est plus disponible après 80 ans. L'assurance-vie reste le levier principal.`,
+        leviers: userAge < 80
+          ? ['Assurance-vie', `Don familial ${euro(31865)}/enfant`]
+          : ['Assurance-vie'],
         highlight: true,
       },
     ];
@@ -571,8 +706,10 @@ const generateTimeline = (userProfile) => {
   const items  = [];
   const now    = new Date().getFullYear();
   const userAge  = userProfile?.age || 45;
-  const pereAge  = userProfile?.famille?.pere_age || null;
-  const mereAge  = userProfile?.famille?.mere_age || null;
+  const pereAge         = userProfile?.famille?.pere_age || null;
+  const mereAge         = userProfile?.famille?.mere_age || null;
+  const gpMaternelsAge  = userProfile?.famille?.gp_maternels_age || null;
+  const gpPaternelsAge  = userProfile?.famille?.gp_paternels_age || null;
   const tmiNum   = parseInt(userProfile?.optimisation?.tmi) || 0;
   const revenus  = userProfile?.optimisation?.revenus_annuels_foyer || 0;
   const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
@@ -637,7 +774,34 @@ const generateTimeline = (userProfile) => {
     });
   });
 
-  // 5. Renouvellement abattement 15 ans (donations passées)
+  // 5. GP — AV avant 70 ans + don familial avant 80 ans
+  [['maternels', gpMaternelsAge], ['paternels', gpPaternelsAge]].forEach(([cote, age]) => {
+    if (!age) return;
+    if (age < 70) {
+      const restant = 70 - age;
+      items.push({
+        annee: now + restant,
+        label: `Avant ${now + restant} (GP ${cote} ~ ${age} ans)`,
+        urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
+        titre: `Assurance-vie de vos grands-parents ${cote} — alimenter avant 70 ans`,
+        description: `Les primes versées avant 70 ans bénéficient de l'abattement de 152 500€ par bénéficiaire désigné. Après 70 ans, l'avantage fiscal est considérablement réduit. ${restant <= 3 ? `⚠ Seulement ${restant} an${restant > 1 ? 's' : ''}.` : ''}`,
+        type: 'deadline_fiscale',
+      });
+    }
+    if (age < 80) {
+      const restant = 80 - age;
+      items.push({
+        annee: now + restant,
+        label: `Avant ${now + restant} (GP ${cote} ~ ${age} ans)`,
+        urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
+        titre: `Don familial de vos grands-parents ${cote} — avant leurs 80 ans`,
+        description: `Vos grands-parents ${cote} peuvent donner 31 865€ en numéraire sans droits, cumulable avec l'abattement de 31 786€ GP→petit-enfant. Ce mécanisme expire à 80 ans.`,
+        type: 'deadline_fiscale',
+      });
+    }
+  });
+
+  // 6. Renouvellement abattement 15 ans (donations passées)
   donationsPassees.forEach(d => {
     if (!d.annee) return;
     const anneeRenouvellement = d.annee + 15;

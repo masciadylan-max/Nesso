@@ -234,7 +234,9 @@ PÉRIMÈTRE PATRIMOINE :
     "pere_age": null,
     "mere_age": null,
     "gp_maternels_vivants": false,
+    "gp_maternels_age": null,
     "gp_paternels_vivants": false,
+    "gp_paternels_age": null,
     "fratrie": [{"prenom": "Marie", "lien": "sœur|frère", "handicap": false}],
     "autres": [{"prenom": "Claire", "lien": "tante|oncle|cousin"}],
     "patrimoine_parents_estime": 0,
@@ -245,6 +247,8 @@ PÉRIMÈTRE PATRIMOINE :
 
 RÈGLE nb_parents_en_vie : compter uniquement les parents BIOLOGIQUES/LÉGAUX en vie au moment de l'audit. Si les deux sont en vie → 2. Si seulement père ou seulement mère → 1. Si aucun → 0. Défaut si non précisé : 1.
 RÈGLE pere_age / mere_age : extraire l'âge du père et de la mère s'il est mentionné dans la conversation (formulaire ou échange). Valeur entière. null si non précisé. Ces âges sont critiques pour les deadlines fiscales (AV avant 70 ans, don familial avant 80 ans).
+RÈGLE gp_maternels_age / gp_paternels_age : âge du grand-parent vivant (ou âge moyen si deux vivants) de chaque côté. Valeur entière. null si non précisé ou aucun vivant de ce côté.
+RÈGLE fratrie — OBLIGATOIRE : tout frère, sœur, demi-frère ou demi-sœur mentionné DOIT figurer dans fratrie (prénom ou 'Frère'/'Sœur' si inconnu, lien = 'frère'|'sœur'). NE PAS laisser fratrie à [] si des frères/sœurs ont été évoqués — même implicitement ("mes deux sœurs", "j'ai un frère"). Le nombre de membres dans fratrie détermine les parts héréditaires.
 
   "focus_principal": "Transmission parentale|Protection du partenaire|Transmission en famille recomposée|Protection des proches & transmission|IFI & optimisation immobilière|Optimisation rémunération & structure|Optimisation fiscale annuelle",
   "focus_audit": "succession|optimisation|les_deux",
@@ -258,6 +262,8 @@ RÈGLE pere_age / mere_age : extraire l'âge du père et de la mère s'il est me
     "donations_passees": [{"de": "parent|user", "vers": "user|enfant", "montant": 0, "annee": 2020}],
     "testament_existant": false
   },
+
+RÈGLE donations_passees — OBLIGATOIRE : toute mention de donation, virement important, aide à l'achat, paiement d'études ou avance sur héritage DOIT être inscrite. 'de' = 'parent' si reçue des parents, 'user' si donnée par l'utilisateur. montant = réel si précisé, 0 si inconnu. annee = exacte ou estimation. NE JAMAIS laisser à [] si une donation a été évoquée — le montant et la date impactent les abattements disponibles.
 
   "optimisation": {
     "revenus_annuels_foyer": 0,
@@ -275,11 +281,13 @@ RÈGLE pere_age / mere_age : extraire l'âge du père et de la mère s'il est me
       "valeur": 250000,
       "type": "Résidence principale|Résidence secondaire|Bien locatif|Bien étranger|SCI|Assurance-vie|PEA|PER|Liquidités|Société|Autre",
       "sci_immo_ratio": null,
+      "av_clause": null,
       "pays": "France",
       "proprietaires": ["user"]
     }
   ],
 
+RÈGLE av_clause : uniquement pour les actifs de type 'Assurance-vie'. 'standard' si clause générique ("mon conjoint à défaut mes enfants"), 'sur_mesure' si clause personnalisée mentionnée, 'inconnue' si non précisé (défaut). Null pour tout autre type d'actif.
 RÈGLE SCI : si un actif est une SCI, utiliser categorie = 'sci' ET type = 'SCI'. sci_immo_ratio = fraction (0 à 1) de l'actif net de la SCI qui est immobilier. Si composition non connue → estimer 0.9 (SCI typiquement quasi-exclusivement immobilière). Exemple : SCI avec 500k€ d'immo + 50k€ de trésorerie → sci_immo_ratio = 0.91.
 
 RÈGLE PROPRIETAIRES — obligatoire sur chaque actif :
@@ -603,7 +611,9 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
       pere_age: null,
       mere_age: null,
       gp_maternels_vivants: false,
+      gp_maternels_age: null,
       gp_paternels_vivants: false,
+      gp_paternels_age: null,
       fratrie: [],
       autres: [],
       patrimoine_parents_estime: 0,
@@ -675,6 +685,10 @@ export default function Onboarding({ onComplete, apiKey, onApiKey, onLogin, onRe
         // sci_immo_ratio : défaut 0.9 si SCI sans ratio précisé (quasi-exclusivement immobilière)
         sci_immo_ratio: a.categorie === 'sci'
           ? (typeof a.sci_immo_ratio === 'number' ? a.sci_immo_ratio : 0.9)
+          : undefined,
+        // Clause bénéficiaire AV — uniquement pour les contrats AV
+        av_clause: a.type === 'Assurance-vie'
+          ? (a.av_clause || 'inconnue')
           : undefined,
         // Garantit que chaque actif a un tableau proprietaires valide
         // Défaut : ['user'] (l'extraction peut ne pas toujours fournir ce champ)
