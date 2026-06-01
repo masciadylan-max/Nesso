@@ -276,6 +276,9 @@ export const generateUserActions = (userProfile, patrimoine) => {
     });
   }
 
+  // Routing : A = économie chiffrée → mise en relation gratuite ; B = potentiel identifié → Nesso+
+  actions.forEach(a => { a.scenario = a.economie > 0 ? 'A' : 'B'; });
+
   const ordre = { rouge: 0, orange: 1, vert: 2 };
   actions.sort((a, b) => (ordre[a.urgence] ?? 3) - (ordre[b.urgence] ?? 3));
   return actions.slice(0, 3);

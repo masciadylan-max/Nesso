@@ -129,9 +129,16 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
 
   // Freemium — hardcodé false en V1 (TODO : connecter à l'état d'abonnement Supabase)
   const isNessoPlus = false;
-  const NessoBadge = () => (
-    <span style={{ background: '#1B2B4B', color: '#C9A96E', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.06em', verticalAlign: 'middle', marginLeft: 6 }}>NESSO+</span>
-  );
+
+  // Construit le mailto pré-rempli pour la mise en relation partenaire (scénario A)
+  const buildMailto = (action) => {
+    const prenom = userProfile?.prenom || '';
+    const subject = encodeURIComponent(`Nesso — Mise en relation : ${action.titreGenerique}`);
+    const body = encodeURIComponent(
+      `Bonjour,\n\nJe souhaite être mis en relation concernant l'action suivante identifiée par Nesso :\n\n${action.titre}\n\n${action.description}${action.economie > 0 ? `\n\nÉconomies identifiées : ${euro(action.economie)}` : ''}\n\nCordialement,\n${prenom}`
+    );
+    return `mailto:partenaires@nesso.fr?subject=${subject}&body=${body}`;
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -434,34 +441,30 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                   En savoir plus →
                 </button>
               </div>
-              {/* Partenaire contextuel */}
-              {action.partenaire && (
-                <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #EDE8E3' }}>
-                  {isNessoPlus ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 15 }}>🤝</span>
-                        <div>
-                          <span style={{ color: '#1B2B4B', fontSize: 13, fontWeight: 600 }}>{action.partenaire.nom}</span>
-                          <span style={{ color: '#7A7A8C', fontSize: 12, marginLeft: 8 }}>{action.partenaire.type}</span>
-                        </div>
-                      </div>
-                      <button className="btn-gold" style={{ fontSize: 12, padding: '6px 14px' }}>Prendre rendez-vous →</button>
+              {/* CTA routing — Scénario A : mise en relation (gratuit) / Scénario B : Nesso+ */}
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px dashed #EDE8E3', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                {action.scenario === 'A' ? (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 15 }}>🤝</span>
+                      <span style={{ color: '#7A7A8C', fontSize: 13 }}>Un partenaire Nesso est disponible pour cette action</span>
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 15 }}>🤝</span>
-                        <span style={{ color: '#7A7A8C', fontSize: 13 }}>Un partenaire Nesso est disponible pour cette action</span>
-                        <NessoBadge />
-                      </div>
-                      <button onClick={() => setShowNessoPlus(true)} style={{ background: 'none', border: '1px solid #E5E7EB', borderRadius: 6, padding: '5px 12px', fontSize: 12, color: '#6B7280', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
-                        Débloquer →
-                      </button>
+                    <a href={buildMailto(action)} style={{ background: '#1B2B4B', color: 'white', borderRadius: 6, padding: '7px 16px', fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap', fontFamily: 'DM Sans, sans-serif' }}>
+                      Être mis en relation →
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: '#C9A96E', fontSize: 15 }}>✦</span>
+                      <span style={{ color: '#7A7A8C', fontSize: 13 }}>Plan d'action détaillé disponible avec Nesso+</span>
                     </div>
-                  )}
-                </div>
-              )}
+                    <button onClick={() => setShowNessoPlus(true)} style={{ background: 'linear-gradient(135deg, #C9A96E 0%, #B8895A 100%)', border: 'none', color: 'white', borderRadius: 6, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', whiteSpace: 'nowrap' }}>
+                      Explorer avec Nesso+ →
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -687,15 +690,27 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                       </div>
                     )}
                   </div>
-                  <div style={{ background: '#1B2B4B', padding: 16, textAlign: 'center' }}>
-                    <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 14, margin: '0 0 4px' }}>✦ Nesso+</p>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: '0 0 12px' }}>
-                      Étapes · Délais · Coûts · Partenaire recommandé
-                    </p>
-                    <button className="btn-gold" onClick={() => setShowNessoPlus(true)} style={{ fontSize: 13, padding: '10px 24px', fontWeight: 700 }}>
-                      Débloquer — 79€ →
-                    </button>
-                  </div>
+                  {selectedAction.scenario === 'A' ? (
+                    <div style={{ background: '#1B2B4B', padding: 16, textAlign: 'center' }}>
+                      <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 13, margin: '0 0 4px' }}>🤝 Partenaire disponible</p>
+                      <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, margin: '0 0 12px' }}>
+                        Un partenaire de confiance reçoit votre rapport et vous contacte directement
+                      </p>
+                      <a href={buildMailto(selectedAction)} style={{ display: 'inline-block', background: '#C9A96E', color: 'white', borderRadius: 8, padding: '10px 24px', fontSize: 13, fontWeight: 700, textDecoration: 'none', fontFamily: 'DM Sans, sans-serif' }}>
+                        Être mis en relation — gratuit →
+                      </a>
+                    </div>
+                  ) : (
+                    <div style={{ background: '#1B2B4B', padding: 16, textAlign: 'center' }}>
+                      <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 14, margin: '0 0 4px' }}>✦ Nesso+</p>
+                      <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: '0 0 12px' }}>
+                        Étapes · Délais · Coûts · Partenaire recommandé
+                      </p>
+                      <button className="btn-gold" onClick={() => setShowNessoPlus(true)} style={{ fontSize: 13, padding: '10px 24px', fontWeight: 700 }}>
+                        Explorer avec Nesso+ →
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             )}
