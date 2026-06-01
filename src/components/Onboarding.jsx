@@ -28,7 +28,12 @@ const buildContextMessage = (f) => {
   const niveauLabel = { debutant: 'Débutant', intermediaire: 'Intermédiaire', avance: 'Expert' }[f.niveau] || '';
   const situLabel   = { celibataire: 'Célibataire', marie: 'Marié(e)', pacse: 'Pacsé(e)', concubin: 'En couple (concubinage)' }[f.situation_civile] || '';
   const regimeLabel = { communaute: 'communauté légale réduite aux acquêts', separation: 'séparation de biens', universel: 'communauté universelle', participation: 'participation aux acquêts' }[f.regime] || '';
-  const patriLabel  = { '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.patrimoine] || '';
+  const hasConjoint = f.situation_civile && f.situation_civile !== 'celibataire' && f.conjoint_prenom;
+  const ASSET_LABELS_CTX = {
+    rp: 'Résidence principale', locatif: 'Immobilier locatif', av: 'Assurance-vie',
+    pea: 'PEA', per: 'PER', liquidites: 'Livrets / Liquidités', financier: 'Autres placements',
+    entreprise: 'Entreprise / Parts sociales', exotique: 'Actifs atypiques', etranger: "Bien à l'étranger",
+  };
   const focusLabel  = { A: 'A — Ce que je vais recevoir (transmission parentale / grands-parents)', B: 'B — Ce que je vais laisser (protection conjoint et enfants)', C: 'C — Réduire ma fiscalité (optimisation)' }[f.focus] || '';
   const orgaLabel   = { oui: 'Oui', en_partie: 'En partie', non: 'Non', sais_pas: 'Je ne sais pas' }[f.parents_orga] || '';
   const nbEnfants   = parseInt(f.enfants) || 0;
@@ -62,17 +67,25 @@ const buildContextMessage = (f) => {
     f.gp_paternels
       ? `Grands-parents paternels : ${{ les_deux: 'Les deux en vie', un: "L'un d'eux en vie", non: 'Aucun' }[f.gp_paternels]}${f.gp_paternels !== 'non' && f.gp_paternels_age ? ` — ${f.gp_paternels_age} ans${f.gp_paternels === 'les_deux' && f.gp_paternels_age2 ? ` / ${f.gp_paternels_age2} ans` : ''}` : ''}`
       : null,
-    patriLabel ? `Patrimoine estimé${(f.situation_civile && f.situation_civile !== 'celibataire' && f.conjoint_prenom) ? ' du foyer' : ' personnel'} : ${patriLabel}` : null,
-    ...(Object.entries(f.patrimoine_detail || {}).map(([key, v]) => {
-      const labels = { rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne/Placements', entreprise: 'Entreprise', etranger: 'Bien étranger' };
-      return v?.valeur ? `  → ${labels[key] || key} : ${parseInt(v.valeur).toLocaleString('fr-FR')} €` : `  → ${labels[key] || key} : montant à préciser`;
-    })),
+    ...(Object.keys(f.patrimoine_detail || {}).length > 0 ? [
+      hasConjoint ? 'Actifs personnels (avec propriété) :' : 'Actifs personnels :',
+      ...Object.entries(f.patrimoine_detail || {}).map(([key, v]) => {
+        const valStr = v?.valeur ? `${parseInt(v.valeur).toLocaleString('fr-FR')} €` : 'montant à préciser';
+        const propStr = hasConjoint && v?.proprio
+          ? (v.proprio === 'user'      ? ' — à vous seul(e)'
+             : v.proprio === 'conjoint' ? ` — à ${f.conjoint_prenom} uniquement`
+             : ' — aux deux en commun')
+          : '';
+        return `  → ${ASSET_LABELS_CTX[key] || key} : ${valStr}${propStr}`;
+      }),
+    ] : []),
+    f.revenus_foyer ? `Revenus annuels du foyer : ${parseInt(f.revenus_foyer).toLocaleString('fr-FR')} €` : null,
     f.evenement?.trim() ? `Événement de vie : ${f.evenement}` : null,
     focusLabel ? `Focus choisi : ${focusLabel}` : null,
     // Focus A
-    f.focus === 'A' && f.parents_patrimoine ? `Patrimoine parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.parents_patrimoine] || f.parents_patrimoine}` : null,
+    f.focus === 'A' && f.parents_patrimoine ? `Patrimoine parents estimé : ${parseInt(f.parents_patrimoine).toLocaleString('fr-FR')} €` : null,
     f.focus === 'A' && f.parents_compo?.length > 0 ? `Composition patrimoine parents : ${f.parents_compo.map(c => ({ rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne / Placements', entreprise: 'Entreprise', etranger: "Bien à l'étranger" })[c] || c).join(', ')}` : null,
-    f.focus === 'A' && f.gp_patrimoine ? `Patrimoine grands-parents estimé : ${{ '<100': '< 100 000 €', '100-300': '100 000 – 300 000 €', '300-700': '300 000 – 700 000 €', '700-1500': '700 000 – 1 500 000 €', '1500+': '> 1 500 000 €' }[f.gp_patrimoine] || f.gp_patrimoine}` : null,
+    f.focus === 'A' && f.gp_patrimoine ? `Patrimoine grands-parents estimé : ${parseInt(f.gp_patrimoine).toLocaleString('fr-FR')} €` : null,
     f.focus === 'A' && f.donations_recues ? `Donations déjà reçues : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.donations_recues] || f.donations_recues}` : null,
     f.focus === 'A' && f.oncles_tantes_maternels ? `Oncles/tantes côté maternel : ${f.oncles_tantes_maternels}` : null,
     f.focus === 'A' && f.oncles_tantes_paternels ? `Oncles/tantes côté paternel : ${f.oncles_tantes_paternels}` : null,
@@ -83,7 +96,6 @@ const buildContextMessage = (f) => {
     f.focus === 'B' && f.actifs_type?.length > 0 ? `Types d'actifs principaux : ${f.actifs_type.map(t => ({ rp: 'Résidence principale', locatif: 'Immobilier locatif', av: 'Assurance-vie', pea: 'PEA', per: 'PER', liquidites: 'Liquidités / Épargne', entreprise: 'Entreprise', etranger: "Bien à l'étranger" })[t] || t).join(', ')}` : null,
     // Focus C
     f.focus === 'C' && f.statut_pro ? `Statut professionnel : ${{ salarie: 'Salarié', tns: 'TNS / indépendant', dirigeant: 'Dirigeant de société', retraite: 'Retraité' }[f.statut_pro] || f.statut_pro}` : null,
-    f.focus === 'C' && f.revenus_foyer ? `Revenus annuels foyer : ${{ '<30': '< 30 000 €', '30-60': '30 000 – 60 000 €', '60-100': '60 000 – 100 000 €', '100-200': '100 000 – 200 000 €', '200+': '> 200 000 €' }[f.revenus_foyer] || f.revenus_foyer}` : null,
     f.focus === 'C' && f.per_ouvert ? `PER ouvert : ${{ oui: 'Oui', non: 'Non' }[f.per_ouvert]}` : null,
     f.focus === 'C' && f.pea_ouvert ? `PEA ouvert : ${{ oui: 'Oui', non: 'Non' }[f.pea_ouvert]}` : null,
   ].filter(Boolean);
@@ -516,12 +528,12 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
   const hasSavedConversation = savedMessages && savedMessages.length > 4;
 
   // Helpers formulaire
-  const totalSteps = 5; // toujours 5 étapes — étape 5 = sous-formulaire par focus
-  const stepTitles = ['Vous', 'Votre famille', 'Votre situation', 'Votre priorité', { A: 'La transmission à recevoir', B: 'Ce que vous transmettrez', C: 'Votre situation fiscale' }[form.focus] || 'Précisions'];
+  const totalSteps = 6; // étape 4 = actifs, étape 6 = sous-formulaire par focus
+  const stepTitles = ['Vous', 'Votre famille', 'Votre situation', 'Vos actifs', 'Votre priorité', { A: 'La transmission à recevoir', B: 'Ce que vous transmettrez', C: 'Votre situation fiscale' }[form.focus] || 'Précisions'];
   const canAdvance = () => {
     if (formStep === 1) return form.prenom.trim().length > 0;
     if (formStep === 2) return form.situation_civile !== '';
-    if (formStep === 4) return form.focus !== '';
+    if (formStep === 5) return form.focus !== '';
     return true;
   };
 
@@ -928,55 +940,6 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                     )}
                   </div>
                 ))}
-                {/* Patrimoine */}
-                <div>
-                  {form.situation_civile && form.situation_civile !== 'celibataire' && form.conjoint_prenom
-                    ? <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 4 }}>Patrimoine du foyer estimé <span style={{ color: '#A8A8B8' }}>(vous + {form.conjoint_prenom})</span></label>
-                    : <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 4 }}>Votre patrimoine personnel estimé</label>
-                  }
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
-                      <button key={val} onClick={() => setForm(p => ({ ...p, patrimoine: val }))}
-                        style={{ padding: '11px 16px', border: `2px solid ${form.patrimoine === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.patrimoine === val ? '#FDF8F0' : 'white', color: form.patrimoine === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.patrimoine === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
-                        {lbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Composition du patrimoine */}
-                {form.patrimoine && (
-                  <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#A8A8B8' }}>(sélectionnez ce qui s'applique)</span></label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {[
-                        { key: 'rp',       label: '🏠 Résidence principale',     placeholder: 'Valeur estimée (€)' },
-                        { key: 'locatif',  label: '🏢 Immobilier locatif',        placeholder: 'Valeur estimée (€)' },
-                        { key: 'financier',label: '💰 Épargne / Placements',      placeholder: 'Montant total (€)' },
-                        { key: 'entreprise',label:'⚙ Entreprise / Parts sociales', placeholder: 'Valeur estimée (€)' },
-                        { key: 'etranger', label: '🌍 Bien à l\'étranger',         placeholder: 'Valeur estimée (€)' },
-                      ].map(({ key, label, placeholder }) => {
-                        const entry = (form.patrimoine_detail || {})[key];
-                        const active = !!entry;
-                        return (
-                          <div key={key}>
-                            <button onClick={() => setForm(p => {
-                              const d = { ...(p.patrimoine_detail || {}) };
-                              if (d[key]) delete d[key]; else d[key] = { valeur: '' };
-                              return { ...p, patrimoine_detail: d };
-                            })} style={{ width: '100%', padding: '10px 14px', border: `2px solid ${active ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: active ? '#F0F4FF' : 'white', color: active ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              {label} {active && <span style={{ color: '#C9A96E' }}>✓</span>}
-                            </button>
-                            {active && (
-                              <input type="number" placeholder={placeholder} value={entry.valeur || ''}
-                                onChange={e => setForm(p => ({ ...p, patrimoine_detail: { ...(p.patrimoine_detail || {}), [key]: { valeur: e.target.value } } }))}
-                                style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: '0 0 8px 8px', borderTop: 'none', padding: '9px 14px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box', marginTop: -2 }} />
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
                 {/* Événement */}
                 <div>
                   <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
@@ -990,8 +953,82 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               </div>
             )}
 
-            {/* ── Étape 4 : Focus ── */}
-            {formStep === 4 && (
+            {/* ── Étape 4 : Vos actifs ── */}
+            {formStep === 4 && (() => {
+              const hasConj = form.situation_civile && form.situation_civile !== 'celibataire' && form.conjoint_prenom;
+              const ASSET_TYPES = [
+                { key: 'rp',         label: '🏠 Résidence principale',                                       placeholder: 'ex : 350 000' },
+                { key: 'locatif',    label: '🏢 Immobilier locatif',                                         placeholder: 'ex : 200 000' },
+                { key: 'av',         label: '💼 Assurance-vie',                                              placeholder: 'ex : 80 000' },
+                { key: 'pea',        label: '📈 PEA',                                                        placeholder: 'ex : 30 000' },
+                { key: 'per',        label: '🏦 PER (Plan Épargne Retraite)',                                 placeholder: 'ex : 20 000' },
+                { key: 'liquidites', label: '💵 Livrets / Liquidités',                                       placeholder: 'ex : 15 000' },
+                { key: 'financier',  label: '📊 Autres placements (CTO, SCPI…)',                             placeholder: 'ex : 50 000' },
+                { key: 'entreprise', label: '⚙ Entreprise / Parts sociales',                                 placeholder: 'ex : 200 000' },
+                { key: 'exotique',   label: '💎 Actifs atypiques (art, montres, crypto, cartes, objets de valeur…)', placeholder: 'ex : 10 000' },
+                { key: 'etranger',   label: "🌍 Bien à l'étranger",                                          placeholder: 'ex : 150 000' },
+              ];
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>
+                    Sélectionnez vos actifs et renseignez un montant estimé. Tout est optionnel — même une approximation aide à calibrer votre tableau de bord.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {ASSET_TYPES.map(({ key, label, placeholder }) => {
+                      const entry = (form.patrimoine_detail || {})[key];
+                      const active = !!entry;
+                      return (
+                        <div key={key}>
+                          <button onClick={() => setForm(p => {
+                            const d = { ...(p.patrimoine_detail || {}) };
+                            if (d[key]) delete d[key]; else d[key] = { valeur: '', proprio: '' };
+                            return { ...p, patrimoine_detail: d };
+                          })} style={{ width: '100%', padding: '10px 14px', border: `2px solid ${active ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: active ? '8px 8px 0 0' : 8, background: active ? '#F0F4FF' : 'white', color: active ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            {label} {active && <span style={{ color: '#C9A96E' }}>✓</span>}
+                          </button>
+                          {active && (
+                            <div style={{ border: '2px solid #1B2B4B', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', background: '#F8FAFF', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              <input type="number" placeholder={`Montant estimé (€) — ${placeholder}`} value={entry.valeur || ''}
+                                onChange={e => setForm(p => ({ ...p, patrimoine_detail: { ...p.patrimoine_detail, [key]: { ...entry, valeur: e.target.value } } }))}
+                                style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                              {hasConj && (
+                                <div>
+                                  <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px' }}>Appartient à :</p>
+                                  <div style={{ display: 'flex', gap: 6 }}>
+                                    {[['user', 'À moi seul(e)'], ['conjoint', `À ${form.conjoint_prenom}`], ['both', 'Aux deux']].map(([val, lbl]) => (
+                                      <button key={val} onClick={() => setForm(p => ({ ...p, patrimoine_detail: { ...p.patrimoine_detail, [key]: { ...entry, proprio: val } } }))}
+                                        style={{ flex: 1, padding: '7px 4px', border: `2px solid ${entry.proprio === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 7, background: entry.proprio === val ? '#FDF8F0' : 'white', color: entry.proprio === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: entry.proprio === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                                        {lbl}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Revenus du foyer — partagés tous focus */}
+                  <div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
+                      Revenus annuels du foyer <span style={{ color: '#A8A8B8' }}>(optionnel — même estimés)</span>
+                    </label>
+                    <input type="number" value={form.revenus_foyer || ''} min="0"
+                      onChange={e => setForm(p => ({ ...p, revenus_foyer: e.target.value }))}
+                      placeholder="ex : 80 000"
+                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                    <p style={{ color: '#A8A8B8', fontSize: 12, margin: '5px 0 0', lineHeight: 1.5 }}>
+                      Permet de calibrer les recommandations fiscales dans votre tableau de bord.
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── Étape 5 : Focus ── */}
+            {formStep === 5 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <p style={{ color: '#7A7A8C', fontSize: 14, margin: '0 0 8px', lineHeight: 1.6 }}>
                   Pour un audit approfondi et pertinent, Nesso se concentre sur <strong style={{ color: '#1B2B4B' }}>un axe à la fois</strong>. Quelle est votre priorité ?
@@ -1015,21 +1052,17 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               </div>
             )}
 
-            {/* ── Étape 5 : Sous-formulaire focus ── */}
-            {formStep === 5 && form.focus === 'A' && (
+            {/* ── Étape 6 : Sous-formulaire focus ── */}
+            {formStep === 6 && form.focus === 'A' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Quelques précisions pour calibrer l'audit sur ce que vous allez recevoir.</p>
                 {/* Patrimoine parents */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Patrimoine estimé de vos parents</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
-                      <button key={val} onClick={() => setForm(p => ({ ...p, parents_patrimoine: val }))}
-                        style={{ padding: '10px 16px', border: `2px solid ${form.parents_patrimoine === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_patrimoine === val ? '#FDF8F0' : 'white', color: form.parents_patrimoine === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.parents_patrimoine === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
-                        {lbl}
-                      </button>
-                    ))}
-                  </div>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos parents <span style={{ color: '#A8A8B8' }}>(même approximatif)</span></label>
+                  <input type="number" value={form.parents_patrimoine || ''} min="0"
+                    onChange={e => setForm(p => ({ ...p, parents_patrimoine: e.target.value }))}
+                    placeholder="ex : 600 000"
+                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                 </div>
                 {/* Composition patrimoine parents */}
                 <div>
@@ -1049,15 +1082,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 {/* Patrimoine GP si en vie */}
                 {((form.gp_maternels && form.gp_maternels !== 'non') || (form.gp_paternels && form.gp_paternels !== 'non')) && (
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Patrimoine estimé de vos grands-parents</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {[['<100','< 100 000 €'],['100-300','100 000 – 300 000 €'],['300-700','300 000 – 700 000 €'],['700-1500','700 000 – 1 500 000 €'],['1500+','> 1 500 000 €']].map(([val, lbl]) => (
-                        <button key={val} onClick={() => setForm(p => ({ ...p, gp_patrimoine: val }))}
-                          style={{ padding: '10px 16px', border: `2px solid ${form.gp_patrimoine === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.gp_patrimoine === val ? '#FDF8F0' : 'white', color: form.gp_patrimoine === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.gp_patrimoine === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
-                          {lbl}
-                        </button>
-                      ))}
-                    </div>
+                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos grands-parents <span style={{ color: '#A8A8B8' }}>(même approximatif)</span></label>
+                    <input type="number" value={form.gp_patrimoine || ''} min="0"
+                      onChange={e => setForm(p => ({ ...p, gp_patrimoine: e.target.value }))}
+                      placeholder="ex : 400 000"
+                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                   </div>
                 )}
                 {/* Oncles / tantes — si GP en vie */}
@@ -1121,7 +1150,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               </div>
             )}
 
-            {formStep === 5 && form.focus === 'B' && (
+            {formStep === 6 && form.focus === 'B' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour cibler l'audit sur votre transmission et la protection de vos proches.</p>
                 {/* Testament */}
@@ -1166,7 +1195,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               </div>
             )}
 
-            {formStep === 5 && form.focus === 'C' && (
+            {formStep === 6 && form.focus === 'C' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour calibrer l'audit sur votre situation fiscale personnelle.</p>
                 {/* Statut pro */}
@@ -1176,18 +1205,6 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                     {[['salarie','Salarié'],['tns','TNS / indépendant'],['dirigeant','Dirigeant de société'],['retraite','Retraité']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, statut_pro: val }))}
                         style={{ padding: '11px', border: `2px solid ${form.statut_pro === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.statut_pro === val ? '#F0F4FF' : 'white', color: form.statut_pro === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.statut_pro === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
-                        {lbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {/* Revenus foyer */}
-                <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Revenus annuels du foyer</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {[['<30','< 30 000 €'],['30-60','30 000 – 60 000 €'],['60-100','60 000 – 100 000 €'],['100-200','100 000 – 200 000 €'],['200+','> 200 000 €']].map(([val, lbl]) => (
-                      <button key={val} onClick={() => setForm(p => ({ ...p, revenus_foyer: val }))}
-                        style={{ padding: '10px 16px', border: `2px solid ${form.revenus_foyer === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.revenus_foyer === val ? '#FDF8F0' : 'white', color: form.revenus_foyer === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.revenus_foyer === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
                         {lbl}
                       </button>
                     ))}
