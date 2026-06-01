@@ -63,6 +63,10 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
                     </div>
                     <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{userProfile.famille?.pere_prenom || 'Père'}</p>
                     <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>En vie</p>
+                    {/* Patrimoine individuel — seulement si père seul en vie */}
+                    {(userProfile.parents_en_vie === 'pere') && userProfile.famille?.patrimoine_parents_estime > 0 && (
+                      <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 12, marginTop: 4 }}>{euro(userProfile.famille.patrimoine_parents_estime)}</p>
+                    )}
                   </div>
                 )}
                 {(userProfile.parents_en_vie === 'les_deux' || userProfile.parents_en_vie === 'mere' || userProfile.parents_en_vie === true) && (
@@ -72,10 +76,19 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
                     </div>
                     <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 13, margin: '0 0 2px' }}>{userProfile.famille?.mere_prenom || 'Mère'}</p>
                     <p style={{ color: '#7A7A8C', fontSize: 11, margin: 0 }}>En vie</p>
-                    {userProfile.famille?.patrimoine_parents_estime > 0 && <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 12, marginTop: 4 }}>{euro(userProfile.famille.patrimoine_parents_estime)}</p>}
+                    {/* Patrimoine individuel — seulement si mère seule en vie */}
+                    {(userProfile.parents_en_vie === 'mere') && userProfile.famille?.patrimoine_parents_estime > 0 && (
+                      <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 12, marginTop: 4 }}>{euro(userProfile.famille.patrimoine_parents_estime)}</p>
+                    )}
                   </div>
                 )}
               </div>
+              {/* Patrimoine commun — centré entre père et mère quand les deux sont en vie */}
+              {(userProfile.parents_en_vie === 'les_deux' || userProfile.parents_en_vie === true) && userProfile.famille?.patrimoine_parents_estime > 0 && (
+                <p style={{ textAlign: 'center', color: '#C9A96E', fontWeight: 700, fontSize: 12, margin: '6px 0 4px', letterSpacing: '0.02em' }}>
+                  Patrimoine commun estimé : {euro(userProfile.famille.patrimoine_parents_estime)}
+                </p>
+              )}
               <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
                 <div style={{ width: 2, height: 32, background: '#C9A96E' }} />
               </div>
@@ -126,6 +139,43 @@ export default function Famille({ pov, setPov, actifs, userProfile }) {
               </div>
             </>
           )}
+          {/* Fratrie */}
+          {userProfile.famille?.fratrie?.length > 0 && (
+            <div style={{ borderTop: '1px dashed #EDE8E3', marginTop: 28, paddingTop: 20 }}>
+              <p style={{ textAlign: 'center', color: '#A8A8B8', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>Fratrie</p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
+                {userProfile.famille.fratrie.map((f, i) => (
+                  <div key={i} style={{ textAlign: 'center', minWidth: 90 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#F5F0EA', border: '2px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1B2B4B', fontWeight: 700, fontSize: 15, margin: '0 auto 6px' }}>
+                      {(f.prenom || (f.lien === 'sœur' ? 'S' : 'F'))[0].toUpperCase()}
+                    </div>
+                    <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 12, margin: '0 0 2px' }}>{f.prenom || (f.lien === 'sœur' ? 'Sœur' : 'Frère')}</p>
+                    <p style={{ color: '#7A7A8C', fontSize: 10, margin: 0 }}>{f.lien}</p>
+                    {f.handicap && <p style={{ color: '#1D4ED8', fontSize: 10, marginTop: 3, fontWeight: 500 }}>Abatt. handicap</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Autres proches — tantes, oncles, cousins */}
+          {userProfile.famille?.autres?.length > 0 && (
+            <div style={{ borderTop: '1px dashed #EDE8E3', marginTop: 20, paddingTop: 20 }}>
+              <p style={{ textAlign: 'center', color: '#A8A8B8', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 14 }}>Autres proches</p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 14, flexWrap: 'wrap' }}>
+                {userProfile.famille.autres.map((a, i) => (
+                  <div key={i} style={{ textAlign: 'center', minWidth: 80 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#F9F8F6', border: '1px solid #E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7A7A8C', fontWeight: 700, fontSize: 13, margin: '0 auto 6px' }}>
+                      {(a.prenom || a.lien || '?')[0].toUpperCase()}
+                    </div>
+                    <p style={{ fontWeight: 500, color: '#374151', fontSize: 12, margin: '0 0 2px' }}>{a.prenom || a.lien}</p>
+                    <p style={{ color: '#A8A8B8', fontSize: 10, margin: 0 }}>{a.lien}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {!hasFamily && (
             <p style={{ textAlign: 'center', color: '#7A7A8C', fontSize: 13, marginTop: 20, fontStyle: 'italic' }}>
               Refaites l'audit et mentionnez les prénoms de vos proches pour enrichir cet arbre.

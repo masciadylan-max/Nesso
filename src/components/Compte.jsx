@@ -87,7 +87,7 @@ export default function Compte({ authUser, userProfile, onLogout, onView }) {
               <Field label="Profession" value={userProfile?.profession || '—'} />
               <Field label="Situation civile" value={userProfile?.situation_civile || '—'} />
               <p style={{ color: '#7A7A8C', fontSize: 12, marginTop: 18, lineHeight: 1.6 }}>
-                Pour modifier ces informations, refaites un audit depuis le tableau de bord ou éditez vos actifs.
+                Pour modifier ces informations, éditez vos actifs depuis l'onglet dédié.
               </p>
             </div>
           )}

@@ -220,7 +220,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 600,
+        max_tokens: 1024,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         messages: history.slice(-18).map(m => ({ role: m.role, content: m.content }))
       }),
@@ -268,7 +268,12 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
     // Nouvelle archi phasée : focus_principal + focus_audit (déduit)
     const VALID_FOCUSES = ['Transmission parentale', 'Protection du partenaire', 'Transmission en famille recomposée', 'Protection des proches & transmission', 'IFI & optimisation immobilière', 'Optimisation rémunération & structure', 'Optimisation fiscale annuelle'];
-    if (!VALID_FOCUSES.includes(out.focus_principal)) {
+    // Normaliser : trim + correspondance insensible à la casse avant de valider
+    const trimmedFocus = (out.focus_principal || '').trim();
+    const matchedFocus = VALID_FOCUSES.find(f => f.toLowerCase() === trimmedFocus.toLowerCase());
+    if (matchedFocus) {
+      out.focus_principal = matchedFocus; // normalise la casse/espaces
+    } else {
       out.focus_principal = PROFIL_VIDE.focus_principal;
     }
     // Déduire focus_audit depuis focus_principal si absent ou invalide
@@ -297,7 +302,8 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
       ...(out.famille || {}),
     };
     // Dériver nb_parents_en_vie si Haiku n'a pas rempli le champ
-    if (!out.famille.nb_parents_en_vie) {
+    // IMPORTANT : utiliser == null (pas !) pour ne pas écraser la valeur 0 (deux parents décédés)
+    if (out.famille.nb_parents_en_vie == null) {
       const hasMere = !!out.famille.mere_prenom;
       const hasPere = !!out.famille.pere_prenom;
       out.famille.nb_parents_en_vie = (hasMere && hasPere) ? 2 : (hasMere || hasPere || out.parents_en_vie) ? 1 : 0;

@@ -218,7 +218,14 @@ export default function App() {
         }))
       : ACTIFS;
     const newProfile = userData || null;
-    const newPov     = userData ? 'user' : 'lucas';
+    // Si l'user n'a aucun actif en son nom propre mais a un conjoint → démarrer en vue foyer
+    // (évite un dashboard à 0 quand tous les biens sont au nom du conjoint)
+    const userHasOwnActifs = userActifs.some(a =>
+      !a.proprietaires || a.proprietaires.length === 0 || a.proprietaires.includes('user')
+    );
+    const newPov = userData
+      ? (userData.conjoint && !userHasOwnActifs ? 'foyer' : 'user')
+      : 'lucas';
 
     setUserProfile(newProfile);
     setActifs(userActifs);
@@ -243,6 +250,7 @@ export default function App() {
         ...userProfile,
         actifs: newActifs.map(a => ({
           nom: a.nom, categorie: a.categorie, valeur: a.valeur, type: a.type, pays: a.pays,
+          proprietaires: a.proprietaires,
         })),
       };
       setUserProfile(updatedProfile);

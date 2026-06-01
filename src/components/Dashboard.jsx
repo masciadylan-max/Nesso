@@ -110,9 +110,14 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   const userProfileForPov = isUserPov ? { ...userProfile, actifs: povActifs } : null;
 
   // Focus A (Transmission parentale) → calcul sur le patrimoine des parents, pas de l'user
+  // Condition robuste : match exact OU fallback si patrimoine perso = 0 et parents ont du patrimoine significatif
+  const patrimoineParentsPourFocusA = userProfile?.famille?.patrimoine_parents_estime || 0;
   const isFocusA = isUserPov
-    && userProfile?.focus_principal === 'Transmission parentale'
-    && (userProfile?.famille?.patrimoine_parents_estime || 0) > 0;
+    && patrimoineParentsPourFocusA > 0
+    && (
+      userProfile?.focus_principal === 'Transmission parentale'
+      || (patrimoine === 0 && patrimoineParentsPourFocusA > 50000)
+    );
 
   const calculs = isUserPov
     ? (isFocusA ? computeFocusACalculs(userProfileForPov) : computeUserCalculs(patrimoine, userProfileForPov))
@@ -189,12 +194,6 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
             Situation patrimoniale au {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
-        {onRefairAudit && (
-          <button onClick={onRefairAudit}
-            style={{ background: 'white', border: '1px solid #E5E7EB', color: '#6B7280', borderRadius: 9, padding: '9px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap', flexShrink: 0 }}>
-            ↺ Refaire mon audit
-          </button>
-        )}
       </div>
 
       {/* 3 cartes du haut */}
