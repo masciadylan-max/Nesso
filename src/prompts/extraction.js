@@ -6,7 +6,7 @@ RÈGLE ABSOLUE — PROPRIÉTÉ DES ACTIFS :
 Le champ 'actifs' ne contient QUE les biens personnels de l'UTILISATEUR (la personne qui conduit cet audit).
 Si la conversation a abordé les biens des parents, grands-parents, tante, oncle, frère ou sœur — même pour les optimiser — ces biens N'appartiennent PAS à l'utilisateur.
 Mettre le patrimoine des ascendants dans 'famille.patrimoine_parents' et 'famille.patrimoine_gp'.
-Compagne/concubin = toujours renseigner le champ 'conjoint' avec son prénom si mentionné(e) dans la conversation. Ses actifs propres restent hors 'actifs' de l'utilisateur — sauf bien explicitement co-détenu.
+Compagne/concubin = toujours renseigner le champ 'conjoint' avec son prénom si mentionné(e) dans la conversation ou dans le formulaire de cadrage. RÈGLE ABSOLUE : si une personne de vie commune (conjoint, partenaire, compagne, compagnon) est mentionnée à n'importe quel endroit de la conversation ou du formulaire, le champ 'conjoint' NE PEUT PAS être null. Ses actifs propres restent hors 'actifs' de l'utilisateur — sauf bien explicitement co-détenu.
 
 PÉRIMÈTRE PATRIMOINE :
 - Si situation_civile = 'marie' ou 'pacse' : 'actifs' = biens du foyer (user + conjoint). JAMAIS les biens des parents/beaux-parents/fratrie.
