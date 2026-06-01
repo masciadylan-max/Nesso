@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase.js';
 
+// Suggestions de villes pour l'autocomplete (datalist)
+const VILLES_FR = [
+  'Paris','Marseille','Lyon','Toulouse','Nice','Nantes','Montpellier','Strasbourg',
+  'Bordeaux','Lille','Rennes','Reims','Le Havre','Saint-Étienne','Toulon','Grenoble',
+  'Dijon','Angers','Nîmes','Villeurbanne','Le Mans','Aix-en-Provence','Clermont-Ferrand',
+  'Brest','Tours','Amiens','Limoges','Annecy','Perpignan','Boulogne-Billancourt',
+  'Metz','Besançon','Orléans','Mulhouse','Rouen','Caen','Nancy','Argenteuil','Montreuil',
+  'Saint-Denis','Roubaix','Tourcoing','Avignon','Nanterre','Poitiers','Versailles',
+  'Créteil','Pau','Courbevoie','Vitry-sur-Seine','Colombes','Aulnay-sous-Bois','Asnières-sur-Seine',
+];
+
 // Parse les tokens depuis le hash de l'URL (#access_token=...&refresh_token=...)
 const parseHashTokens = () => {
   if (typeof window === 'undefined') return null;
@@ -23,10 +34,14 @@ const withTimeout = (promise, ms, errorMsg = 'Délai dépassé') =>
 export default function Auth({ embedded = false, onClose, recoveryMode = false }) {
   // Si l'user arrive depuis le lien de reset email → mode 'newpassword'
   const [mode, setMode]         = useState(recoveryMode ? 'newpassword' : 'login'); // 'login' | 'register' | 'reset' | 'newpassword'
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [prenom, setPrenom]     = useState('');
-  const [consent, setConsent]   = useState(false);
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [prenom, setPrenom]       = useState('');
+  const [nom, setNom]             = useState('');
+  const [ville, setVille]         = useState('');
+  const [codePostal, setCodePostal] = useState('');
+  const [pays, setPays]           = useState('France');
+  const [consent, setConsent]     = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState('');
@@ -75,7 +90,7 @@ export default function Auth({ embedded = false, onClose, recoveryMode = false }
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { prenom } },
+          options: { data: { prenom, nom: nom.trim(), ville: ville.trim(), code_postal: codePostal.trim(), pays: pays.trim() || 'France' } },
         });
         if (error) throw error;
         setSuccess('Compte créé ! Vérifiez votre email pour confirmer votre inscription.');
@@ -153,14 +168,26 @@ export default function Auth({ embedded = false, onClose, recoveryMode = false }
 
         <form onSubmit={handleSubmit}>
           {mode === 'register' && (
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Prénom</label>
-              <input
-                type="text" value={prenom} onChange={e => setPrenom(e.target.value)}
-                placeholder="Votre prénom" required autoComplete="given-name"
-                style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
-              />
-            </div>
+            <>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Prénom</label>
+                  <input
+                    type="text" value={prenom} onChange={e => setPrenom(e.target.value)}
+                    placeholder="Prénom" required autoComplete="given-name"
+                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Nom</label>
+                  <input
+                    type="text" value={nom} onChange={e => setNom(e.target.value)}
+                    placeholder="Nom de famille" autoComplete="family-name"
+                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+            </>
           )}
 
           {/* Email caché en mode 'newpassword' : la session de récupération est déjà active */}
@@ -195,20 +222,66 @@ export default function Auth({ embedded = false, onClose, recoveryMode = false }
           )}
 
           {mode === 'register' && (
-            <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <input
-                type="checkbox" id="consent" checked={consent} onChange={e => setConsent(e.target.checked)}
-                style={{ marginTop: 2, flexShrink: 0, accentColor: '#1B2B4B', width: 16, height: 16, cursor: 'pointer' }}
-              />
-              <label htmlFor="consent" style={{ color: '#6B7280', fontSize: 13, lineHeight: 1.5, cursor: 'pointer' }}>
-                J'ai lu et j'accepte la{' '}
-                <a href="#confidentialite" onClick={e => { e.preventDefault(); window.open('/confidentialite', '_blank'); }}
-                  style={{ color: '#C9A96E', fontWeight: 600, textDecoration: 'underline' }}>
-                  politique de confidentialité
-                </a>
-                , notamment le stockage de mes données patrimoniales et leur traitement par l'IA Claude (Anthropic).
-              </label>
-            </div>
+            <>
+              {/* Ville + Code postal */}
+              <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                <div style={{ flex: 2 }}>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Ville de résidence</label>
+                  <input
+                    type="text" value={ville} onChange={e => setVille(e.target.value)}
+                    placeholder="Paris, Lyon…" autoComplete="address-level2"
+                    list="villes-fr"
+                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
+                  />
+                  <datalist id="villes-fr">
+                    {VILLES_FR.map(v => <option key={v} value={v} />)}
+                  </datalist>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Code postal</label>
+                  <input
+                    type="text" value={codePostal} onChange={e => setCodePostal(e.target.value)}
+                    placeholder="75001" autoComplete="postal-code" maxLength={10}
+                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              {/* Pays */}
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Pays</label>
+                <input
+                  type="text" value={pays} onChange={e => setPays(e.target.value)}
+                  placeholder="France" autoComplete="country-name"
+                  list="pays-list"
+                  style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}
+                />
+                <datalist id="pays-list">
+                  <option value="France" />
+                  <option value="Belgique" />
+                  <option value="Suisse" />
+                  <option value="Luxembourg" />
+                  <option value="Monaco" />
+                  <option value="Canada" />
+                </datalist>
+              </div>
+
+              {/* CGU */}
+              <div style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <input
+                  type="checkbox" id="consent" checked={consent} onChange={e => setConsent(e.target.checked)}
+                  style={{ marginTop: 2, flexShrink: 0, accentColor: '#1B2B4B', width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <label htmlFor="consent" style={{ color: '#6B7280', fontSize: 13, lineHeight: 1.5, cursor: 'pointer' }}>
+                  J'ai lu et j'accepte la{' '}
+                  <a href="#confidentialite" onClick={e => { e.preventDefault(); window.open('/confidentialite', '_blank'); }}
+                    style={{ color: '#C9A96E', fontWeight: 600, textDecoration: 'underline' }}>
+                    politique de confidentialité
+                  </a>
+                  , notamment le stockage de mes données patrimoniales et leur traitement par l'IA Claude (Anthropic).
+                </label>
+              </div>
+            </>
           )}
 
           <button type="submit" className="btn-navy" disabled={loading}
