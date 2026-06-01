@@ -1,831 +1,10 @@
 import { useState, useEffect } from 'react';
 import { CALCULS, ACTIONS } from '../data.js';
 import { euro, getPersonne, getPatrimoine, filterActifsByPov } from '../utils.js';
-import { Badge, Skeleton, Modal } from './Shared.jsx';
-
-// ── Barème progressif succession ligne directe (art. 777 CGI) ──────────────
-const calcDroitsBareme = (taxable) => {
-  if (taxable <= 0) return 0;
-  const tranches = [
-    { plafond: 8072,     taux: 0.05 },
-    { plafond: 12109,    taux: 0.10 },
-    { plafond: 15932,    taux: 0.15 },
-    { plafond: 552324,   taux: 0.20 },
-    { plafond: 902838,   taux: 0.30 },
-    { plafond: Infinity, taux: 0.45 },
-  ];
-  let droits = 0, base = 0;
-  for (const { plafond, taux } of tranches) {
-    const tranche = Math.min(taxable - base, plafond - base);
-    if (tranche <= 0) break;
-    droits += tranche * taux;
-    base = plafond;
-    if (base >= taxable) break;
-  }
-  return Math.round(droits);
-};
-
-// ── Barème IFI progressif (art. 977 CGI) ────────────────────────────────────
-const calcIFI = (net) => {
-  if (net < 1300000) return 0;
-  const tranches = [
-    { debut: 800000,   fin: 1300000,  taux: 0.005  },
-    { debut: 1300000,  fin: 2570000,  taux: 0.007  },
-    { debut: 2570000,  fin: 5000000,  taux: 0.010  },
-    { debut: 5000000,  fin: 10000000, taux: 0.0125 },
-    { debut: 10000000, fin: Infinity, taux: 0.015  },
-  ];
-  let ifi = 0;
-  for (const { debut, fin, taux } of tranches) {
-    const tranche = Math.min(net, fin) - debut;
-    if (tranche <= 0) continue;
-    ifi += tranche * taux;
-  }
-  return Math.round(ifi);
-};
-
-// ── Base IFI — immo direct + parts de SCI à prépondérance immobilière ────────
-// Art. 965 CGI : les parts de SCI sont taxables à l'IFI proportionnellement
-// à la fraction immobilière de l'actif net de la SCI.
-const calcBaseIFI = (actifs) => (actifs || []).reduce((sum, a) => {
-  if (a.categorie === 'immobilier') {
-    const abattRP = a.type === 'Résidence principale' ? 0.30 : 0;
-    return sum + (a.valeur || 0) * (1 - abattRP);
-  }
-  if (a.categorie === 'sci') {
-    const ratio = typeof a.sci_immo_ratio === 'number' ? a.sci_immo_ratio : 0.9;
-    return sum + (a.valeur || 0) * ratio;
-  }
-  return sum;
-}, 0);
-
-// ── Base de succession — applique la décote d'illiquidité sur les parts de SCI
-// Le fisc accepte 10–15% de décote (illiquidité + contraintes statutaires).
-// On retient 15% par prudence (conservative côté client = avantage réel).
-const calcBaseSuccession = (patrimoine, actifs) => {
-  const sciDecote = (actifs || [])
-    .filter(a => a.categorie === 'sci')
-    .reduce((sum, a) => sum + Math.round((a.valeur || 0) * 0.15), 0);
-  return Math.max(0, patrimoine - sciDecote);
-};
-
-// ── Barème nue-propriété art. 669 CGI ────────────────────────────────────────
-// Retourne la fraction de la valeur vénale correspondant à la nue-propriété,
-// selon l'âge de l'usufruitier (le parent qui garde l'usufruit).
-const calcTauxNuePropriete = (ageUsufruitier) => {
-  if (!ageUsufruitier || ageUsufruitier < 21) return 0.10;
-  if (ageUsufruitier <= 30) return 0.20;
-  if (ageUsufruitier <= 40) return 0.30;
-  if (ageUsufruitier <= 50) return 0.40;
-  if (ageUsufruitier <= 60) return 0.50;
-  if (ageUsufruitier <= 70) return 0.60;
-  if (ageUsufruitier <= 80) return 0.70;
-  if (ageUsufruitier <= 90) return 0.80;
-  return 0.90;
-};
-
-// ── Score de risque successoral — calculé sur les vrais signaux ─────────────
-const computeScore = (userProfile, { patrimoine = 0, droitsStatusQuo = 0 } = {}) => {
-  let score = 15; // baseline : toute situation non suivie comporte un risque résiduel
-  const alertes    = (userProfile?.alertes || []).map(a => a.toLowerCase());
-  const situation  = userProfile?.situation_civile || '';
-  const testamentExistant = userProfile?.succession?.testament_existant;
-  const hasAV      = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
-  const userAge    = userProfile?.age || 45;
-  const tmiNum     = parseInt(userProfile?.optimisation?.tmi) || 0;
-  const revenus    = userProfile?.optimisation?.revenus_annuels_foyer || 0;
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert  = dispositifs.some(d => d.toLowerCase().includes('per'));
-
-  // Risques critiques
-  if ((situation === 'pacse' && !testamentExistant) || alertes.some(a => a.includes('pacs'))) score += 35;
-  if (alertes.some(a => a.includes('concubinage'))) score += 35;
-  if (alertes.some(a => a.includes('famille_recompos'))) score += 20;
-  if (alertes.some(a => a.includes('international'))) score += 15;
-  if (alertes.some(a => a.includes('ifi'))) score += 10;
-
-  // Risques structurels
-  if (situation === 'marie' && (userProfile?.enfants || 0) > 0 && !testamentExistant) score += 10;
-  if (!hasAV && (userProfile?.actifs?.length || 0) > 0) score += 10;
-
-  // Fenêtre fiscale AV qui se ferme (avant 70 ans)
-  if (!hasAV && userAge >= 65) score += 15;  // < 5 ans pour agir
-  if (!hasAV && userAge >= 68) score += 10;  // urgence critique
-
-  // PER absent à TMI fort = levier majeur manqué
-  if (!perOuvert && tmiNum >= 41 && revenus > 0) score += 10;
-
-  // Droits successoraux élevés vs patrimoine (sous-assurance successorale)
-  if (patrimoine > 0 && droitsStatusQuo > patrimoine * 0.20) score += 15;
-
-  return Math.min(100, score);
-};
-
-// ── Calculs du tableau de bord — barèmes réels ──────────────────────────────
-const computeUserCalculs = (patrimoine, userProfile) => {
-  const nbEnfants = userProfile?.enfants || 0;
-  const situation  = userProfile?.situation_civile || '';
-
-  // Base de succession après décote SCI (parts de SCI taxées sur 85% de leur valeur)
-  const baseSuccession = calcBaseSuccession(patrimoine, userProfile?.actifs);
-
-  // Droits de succession — ligne directe (art. 779 + 777 CGI)
-  let droitsStatusQuo = 0;
-  let droitsOptimise  = 0;
-
-  if (nbEnfants > 0) {
-    // Abattement 100 000€ par enfant — parts égales entre héritiers
-    const partParEnfant      = Math.round(baseSuccession / nbEnfants);
-    const taxableParEnfant   = Math.max(0, partParEnfant - 100000);
-    droitsStatusQuo          = calcDroitsBareme(taxableParEnfant) * nbEnfants;
-
-    // Optimisé : assurance-vie hors succession (152 500€/bénéficiaire) réduit la masse taxable
-    const avHorsSuccession   = Math.min(baseSuccession * 0.35, 152500 * nbEnfants);
-    const masseApresAV       = Math.max(0, baseSuccession - avHorsSuccession);
-    const partOptimisee      = Math.round(masseApresAV / nbEnfants);
-    const taxableOptimise    = Math.max(0, partOptimisee - 100000);
-    droitsOptimise           = calcDroitsBareme(taxableOptimise) * nbEnfants;
-
-  } else if (situation === 'marie' || situation === 'pacse') {
-    // Conjoint/partenaire (avec testament) : exonéré → droits nuls
-    // Sans testament pour PACS : succession aux parents (abattement 100k chacun, ligne directe)
-    const parentsEnVie = userProfile?.parents_en_vie;
-    if (situation === 'pacse' && !userProfile?.succession?.testament_existant && parentsEnVie) {
-      const partParParent = Math.round(baseSuccession / 2);
-      droitsStatusQuo     = calcDroitsBareme(Math.max(0, partParParent - 100000)) * 2;
-      droitsOptimise      = Math.round(droitsStatusQuo * 0.5);
-    }
-    // Marié + pas d'enfants : conjoint exonéré, droits nuls
-  } else {
-    // Célibataire / concubin sans enfants
-    const parentsEnVie = userProfile?.parents_en_vie;
-    if (parentsEnVie) {
-      // Succession aux parents : ligne directe ascendante, abattement 100k/parent
-      const partParParent = Math.round(baseSuccession / 2);
-      droitsStatusQuo     = calcDroitsBareme(Math.max(0, partParParent - 100000)) * 2;
-    } else {
-      // Fratrie : abattement 15 932€, taux 35-45%
-      const fratrie       = Math.max(1, (userProfile?.famille?.fratrie || []).length);
-      const partFratrie   = Math.round(baseSuccession / fratrie);
-      const taxFratrie    = Math.max(0, partFratrie - 15932);
-      const droitFratrie  = taxFratrie <= 24430
-        ? Math.round(taxFratrie * 0.35)
-        : Math.round(24430 * 0.35 + (taxFratrie - 24430) * 0.45);
-      droitsStatusQuo     = droitFratrie * fratrie;
-    }
-    droitsOptimise = Math.round(droitsStatusQuo * 0.5); // AV + testament peuvent couvrir ~50%
-  }
-
-  // IFI — barème progressif (immo direct + SCI à prépondérance immobilière)
-  const patrimoineImmoNet = calcBaseIFI(userProfile?.actifs);
-  const ifi = calcIFI(patrimoineImmoNet);
-
-  // IR estimé — TMI extrait par Haiku ou barème IR 2024
-  const tmiStr  = userProfile?.optimisation?.tmi;
-  const tmiNum  = parseInt(tmiStr) || 0;
-  const revenus = userProfile?.optimisation?.revenus_annuels_foyer || 0;
-  let ir = 0;
-  if (revenus > 0) {
-    if (tmiNum > 0) {
-      // Taux effectif ≈ TMI × 0,55 (intègre les tranches inférieures et les abattements courants)
-      ir = Math.round(revenus * (tmiNum / 100) * 0.55);
-    } else {
-      // Barème IR 2024 (une part) — approximation foyer monoactif
-      const baremeIR = [
-        { plafond: 11294,   taux: 0 },
-        { plafond: 28797,   taux: 0.11 },
-        { plafond: 82341,   taux: 0.30 },
-        { plafond: 177106,  taux: 0.41 },
-        { plafond: Infinity, taux: 0.45 },
-      ];
-      let irBrut = 0, prev = 0;
-      for (const { plafond, taux } of baremeIR) {
-        const tranche = Math.min(revenus - prev, plafond - prev);
-        if (tranche <= 0) break;
-        irBrut += tranche * taux;
-        prev = plafond;
-      }
-      ir = Math.round(irBrut * 0.85); // -15% pour abattements et crédits courants
-    }
-  }
-
-  // Prélèvements sociaux sur revenus financiers (17,2% sur rendement estimé 2%)
-  const capitalFinancier = (userProfile?.actifs || [])
-    .filter(a => a.categorie === 'financier')
-    .reduce((s, a) => s + (a.valeur || 0), 0);
-  const ps = Math.round(capitalFinancier * 0.02 * 0.172);
-
-  const totalImpots = ir + ifi + ps;
-
-  // Économie PER — plafond réel 2024 : 10% du revenu, min 4 114€, max 35 194€
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert   = dispositifs.some(d => d.toLowerCase().includes('per'));
-  const plafondPER  = revenus > 0 ? Math.min(Math.max(revenus * 0.10, 4114), 35194) : 0;
-  const economiePER = (!perOuvert && tmiNum >= 30 && revenus > 0)
-    ? Math.round(plafondPER * (tmiNum / 100))
-    : 0;
-
-  return {
-    droits: { statusQuo: droitsStatusQuo, optimise: droitsOptimise },
-    economieSuccession: Math.max(0, droitsStatusQuo - droitsOptimise),
-    impots: { IR: ir, IFI: ifi, PS: ps, total: totalImpots },
-    economiesAnnuelles: economiePER,
-    gainDixAns: economiePER * 10,
-    score: computeScore(userProfile, { patrimoine, droitsStatusQuo }),
-    successionEstimee: droitsStatusQuo,
-  };
-};
-
-// ── Calcul succession montante — Focus A (ce que l'user va recevoir) ─────────
-// Raisonne sur le patrimoine des PARENTS (et des GP si présents),
-// pas sur le patrimoine propre de l'utilisateur.
-const computeFocusACalculs = (userProfile) => {
-  const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
-  const patrimoineGP      = userProfile?.famille?.patrimoine_gp_estime || 0;
-  const fratrie           = userProfile?.famille?.fratrie || [];
-  const nbHeritiers       = Math.max(1, fratrie.length + 1); // user + fratrie
-
-  // Abattement par héritier : 100 000€ × nb parents en vie
-  // (chaque parent a son abattement propre, indépendant et renouvelable tous les 15 ans)
-  const nbParentsEnVie  = Math.max(1, userProfile?.famille?.nb_parents_en_vie ?? 1);
-  const abattementTotal = 100000 * nbParentsEnVie; // 100k si 1 parent, 200k si 2
-
-  // Part de l'utilisateur dans la succession parentale (parts égales)
-  const partUser = patrimoineParents > 0 ? Math.round(patrimoineParents / nbHeritiers) : 0;
-
-  // Droits statu quo : part reçue − abattement(s) disponibles
-  const taxableStatuQuo  = Math.max(0, partUser - abattementTotal);
-  const droitsStatusQuo  = calcDroitsBareme(taxableStatuQuo);
-
-  // Droits optimisés :
-  //  • AV des parents (152 500€/bénéficiaire hors succession si versé avant 70 ans)
-  //  • Donation de leur vivant (consomme l'abattement de 100k mais sur valeur actuelle)
-  // Approximation : jusqu'à 30% du patrimoine parents peut passer via AV hors succession
-  const avParentsEstimee = Math.min(patrimoineParents * 0.30, 152500);
-  const masseApresAV     = Math.max(0, patrimoineParents - avParentsEstimee);
-  const partOptimisee    = masseApresAV > 0 ? Math.round(masseApresAV / nbHeritiers) : 0;
-  const taxableOptimise  = Math.max(0, partOptimisee - abattementTotal);
-  const droitsOptimise   = calcDroitsBareme(taxableOptimise);
-
-  // GP : si patrimoine GP connu, calculer les droits du saut de génération potentiel
-  const gpVivants = userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants;
-  const abattementGP     = 31786; // abattement GP→petit-enfant (art. 779 CGI)
-  const taxableGP        = patrimoineGP > 0 ? Math.max(0, Math.round(patrimoineGP / nbHeritiers) - abattementGP) : 0;
-  const droitsGPSiSaut   = patrimoineGP > 0 ? calcDroitsBareme(taxableGP) : 0;
-
-  return {
-    droits: { statusQuo: droitsStatusQuo, optimise: droitsOptimise },
-    economieSuccession: Math.max(0, droitsStatusQuo - droitsOptimise),
-    impots: { IR: 0, IFI: 0, PS: 0, total: 0 },
-    economiesAnnuelles: 0,
-    gainDixAns: 0,
-    score: computeScore(userProfile, { patrimoine: patrimoineParents, droitsStatusQuo }),
-    successionEstimee: droitsStatusQuo,
-    // Métadonnées Focus A exposées à l'UI
-    focusA: {
-      patrimoineParents, partUser, nbHeritiers, nbParentsEnVie, abattementTotal,
-      patrimoineGP, gpVivants, droitsGPSiSaut,
-    },
-  };
-};
-
-// ── Actions prioritaires — orientées par focus et alertes réelles ────────────
-const generateUserActions = (userProfile, patrimoine) => {
-  const actions   = [];
-  const alertes   = (userProfile?.alertes || []).map(a => a.toLowerCase());
-  const focus     = userProfile?.focus_audit || 'les_deux';
-  const situation = userProfile?.situation_civile || '';
-  const nbEnfants = userProfile?.enfants || 0;
-  const testamentExistant = userProfile?.succession?.testament_existant;
-  const tmiNum    = parseInt(userProfile?.optimisation?.tmi) || 0;
-  const revenus   = userProfile?.optimisation?.revenus_annuels_foyer || 0;
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert = dispositifs.some(d => d.toLowerCase().includes('per'));
-  const peaOuvert = dispositifs.some(d => d.toLowerCase().includes('pea'));
-  const hasAV     = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
-  const hasLocatif = (userProfile?.actifs || []).some(a => a.type === 'Bien locatif');
-  const parentsEnVie   = userProfile?.parents_en_vie;
-  const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
-  const patrimoineGP   = userProfile?.famille?.patrimoine_gp_estime || 0;
-  const gpVivants = userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants || userProfile?.succession?.grands_parents_vivants;
-  // IFI : immo direct + SCI à prépondérance immobilière (source de vérité : calcBaseIFI)
-  const patrimoineImmoNet = calcBaseIFI(userProfile?.actifs);
-
-  // ── ALERTES CRITIQUES — rouge, toujours prioritaires ─────────────────────
-  // IFI : source de vérité = calcul sur actifs réels (pas l'alerte Haiku qui peut être stale)
-  if (patrimoineImmoNet > 1300000) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité IFI', titre: 'Bilan IFI obligatoire', description: "Votre patrimoine immobilier net dépasse 1,3M€ — vous êtes soumis à l'IFI (barème progressif de 0,5% à 1,5%). Un bilan précis avec un fiscaliste est indispensable pour évaluer votre base taxable et identifier les actifs exonérés (résidence principale à 30%, bois et forêts, biens professionnels).", economieLabel: 'Variable selon situation', economie: 0, coutLabel: '~500€ (fiscaliste)', cout: 500, delai: '< 3 mois', etapes: ["Lister tous vos actifs immobiliers et calculer le patrimoine net (hors dettes)", "Identifier les actifs exonérés (résidence principale -30%, biens pro, forêts)", "Calculer le passif déductible (emprunts, dettes liées aux actifs imposables)", "Mandater un fiscaliste pour sécuriser la déclaration IFI"], partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' } });
-  }
-  if (alertes.some(a => a.includes('international'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Fiscalité internationale', titre: 'Anticiper la fiscalité internationale', description: "Un bien à l'étranger dans une succession franco-étrangère peut être taxé deux fois. Le règlement UE 650/2012 et les conventions bilatérales peuvent éviter cette double imposition — à anticiper avant tout décès. Sans structuration préventive, la facture peut être considérable.", economieLabel: 'Évite la double imposition', economie: 0, coutLabel: '~800€ (notaire + fiscaliste)', cout: 800, delai: '< 6 mois', etapes: ["Identifier la loi applicable selon le règlement UE 650/2012", "Vérifier la convention bilatérale avec le pays concerné", "Évaluer une structuration préventive (SCI, trust, holding)", "Rédiger un certificat successoral européen si nécessaire"], partenaire: { nom: 'Maison Droit & Patrimoine International', type: 'Avocat fiscaliste international partenaire', disponibilite: 'Sur rendez-vous' } });
-  }
-  if ((situation === 'pacse' && !testamentExistant) || alertes.some(a => a.includes('pacs'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Testament PACS', titre: 'Rédiger un testament — urgence absolue', description: "Sans testament, votre partenaire de PACS n'hérite légalement de rien. Tous vos biens iraient à vos héritiers légaux (parents, fratrie). Un testament olographe peut être rédigé cette semaine, gratuitement — c'est la priorité absolue.", economieLabel: '100% du patrimoine protégé', economie: 0, coutLabel: 'Gratuit (olographe) ou ~150€ (notarié)', cout: 0, delai: 'Cette semaine', etapes: ["Rédiger un testament olographe (entièrement manuscrit, daté, signé)", "Le déposer chez un notaire pour enregistrement au FCDDV", "Revoir simultanément la clause bénéficiaire de vos assurances-vie", "Envisager un testament authentique si patrimoine > 200k€"], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
-  }
-  if (alertes.some(a => a.includes('concubinage'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Protection concubin', titre: 'Protéger votre concubin(e) — 60% de droits de succession', description: "En concubinage, votre partenaire est fiscalement un étranger : abattement de 1 594€ seulement et 60% de droits de succession sur tout ce qu'il reçoit. Testament + assurance-vie sont les deux seuls leviers pour transmettre sans détruire le capital.", economieLabel: 'Évite 60% de droits de succession', economie: 0, coutLabel: '~200€ (notaire + AV)', cout: 200, delai: '< 1 mois', etapes: ["Rédiger un testament pour léguer vos biens à votre concubin", "Ouvrir une assurance-vie avec votre concubin comme bénéficiaire (152 500€ exonérés)", "Étudier l'opportunité du PACS (droits successoraux considérablement améliorés)", "Considérer une clause tontinière sur le bien immobilier commun"], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
-  }
-  if (alertes.some(a => a.includes('famille_recompos') || a.includes('recompos'))) {
-    actions.push({ urgence: 'rouge', titreGenerique: 'Famille recomposée', titre: 'Sécuriser la transmission en famille recomposée', description: "Sans testament, votre conjoint n'hérite que de l'usufruit d'un quart de vos biens (art. 757 CC) — le reste va à vos enfants, y compris d'une union précédente. Ce mécanisme peut créer une indivision forcée entre votre conjoint et vos enfants.", economieLabel: 'Protège le conjoint survivant', economie: 0, coutLabel: '~400€ (notaire)', cout: 400, delai: '< 3 mois', etapes: ["Dresser l'inventaire complet avec tous les enfants de chaque union", "Consulter un notaire spécialisé en familles recomposées", "Rédiger un testament avec clause de préciput en faveur du conjoint", "Étudier l'adoption simple des beaux-enfants si égalité de traitement souhaitée"], partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' } });
-  }
-
-  // ── FOCUS A — Transmission parentale (ce qu'ils vont recevoir) ────────────
-  if (focus === 'succession' || focus === 'les_deux') {
-    // Saut de génération si GP vivants avec patrimoine significatif
-    if (gpVivants && patrimoineGP > 100000) {
-      const fratrie = (userProfile?.famille?.fratrie || []).length;
-      const nbPetitsEnfants = 1 + fratrie; // utilisateur + fratrie
-      actions.push({
-        urgence: 'orange', titreGenerique: 'Saut de génération',
-        titre: 'Étudier le saut de génération avec vos grands-parents',
-        description: `Vos grands-parents ont un patrimoine estimé à ${euro(patrimoineGP)}. Si ce patrimoine transite GP → parents → vous, il sera taxé deux fois. Une donation directe GP → petits-enfants (abattement propre de 31 786€/petit-enfant, tous les 15 ans) évite cette double imposition sur un même actif.`,
-        economieLabel: 'Évite la double imposition sur la même valeur', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois',
-        etapes: [
-          `Calculer les droits avec double transmission (GP→parent : ${nbPetitsEnfants > 1 ? `abattement partagé entre ${nbPetitsEnfants} petits-enfants` : 'abattement 31 786€'}) vs donation directe`,
-          "Identifier le bien le plus adapté au saut de génération (hors bien avec affect fort pour les parents)",
-          "Vérifier l'accord des parents — ils renoncent à une partie de leur héritage",
-          "Formaliser par acte de donation notarié"
-        ],
-        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' }
-      });
-    }
-    // Anticiper la transmission des parents si patrimoine significatif et non organisé
-    if (parentsEnVie && patrimoineParents > 150000) {
-      actions.push({
-        urgence: 'orange', titreGenerique: 'Transmission parentale',
-        titre: 'Anticiper la transmission du patrimoine de vos parents',
-        description: `Le patrimoine de vos parents (estimé à ${euro(patrimoineParents)}) peut être optimisé dès maintenant. Chaque parent peut donner 100 000€ par enfant tous les 15 ans, sans droits. Une donation organisée avec un notaire, faite aujourd'hui, réduit la base taxable future — et gèle les valeurs si c'est une donation-partage.`,
-        economieLabel: "Jusqu'à 100 000€ par parent, par enfant exonérés", economie: 0, coutLabel: '~400–800€ (notaire)', cout: 600, delai: '< 12 mois',
-        etapes: [
-          "Inventorier les actifs transmissibles des parents (immo, AV, financier)",
-          "Vérifier le rappel fiscal : donations < 15 ans à déduire de l'abattement",
-          "Étudier une donation avec réserve d'usufruit pour les actifs immobiliers (parents gardent les revenus)",
-          "Envisager une donation-partage pour geler les valeurs et éviter les conflits entre héritiers"
-        ],
-        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' }
-      });
-    }
-    // Rappel fiscal : donations passées approchant les 15 ans
-    const now = new Date().getFullYear();
-    const donationsAnciennetes = (userProfile?.succession?.donations_passees || [])
-      .filter(d => d.annee && (now - d.annee) >= 10);
-    if (donationsAnciennetes.length > 0) {
-      const annee = donationsAnciennetes[0].annee;
-      actions.push({
-        urgence: 'orange', titreGenerique: 'Rappel fiscal donations',
-        titre: `Fenêtre fiscale — votre abattement se renouvelle vers ${annee + 15}`,
-        description: `Une donation reçue en ${annee} consomme votre abattement de 100 000€ jusqu'en ${annee + 15}. Si vos parents ou grands-parents ont d'autres actifs à transmettre, la fenêtre se rouvre dans ${(annee + 15) - now} an${(annee + 15) - now > 1 ? 's' : ''}. À anticiper pour optimiser le timing.`,
-        economieLabel: 'Optimise le timing des transmissions futures', economie: 0, coutLabel: 'Gratuit (consultation)', cout: 0, delai: `Avant ${annee + 15}`,
-        etapes: [
-          "Lister toutes les donations reçues et leurs dates d'enregistrement",
-          "Calculer la date exacte de renouvellement de l'abattement par donateur",
-          "Anticiper la prochaine donation pour profiter du plein abattement",
-          "Vérifier si le don familial en numéraire (31 865€) est encore disponible"
-        ],
-        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' }
-      });
-    }
-  }
-
-  // ── FOCUS C — Optimisation fiscale ───────────────────────────────────────
-  if (focus === 'optimisation' || focus === 'les_deux') {
-    // PER si TMI ≥ 30% et non ouvert
-    if (!perOuvert && tmiNum >= 30 && revenus > 0) {
-      const economie = Math.round(Math.min(revenus * 0.10, 10000) * (tmiNum / 100));
-      actions.push({
-        urgence: 'orange', titreGenerique: 'PER',
-        titre: `Ouvrir un PER — ${euro(economie)}/an d'impôt en moins`,
-        description: `À ${tmiNum}% de TMI, chaque euro versé sur un PER réduit votre impôt de ${tmiNum} centimes. Sur 10 000€ versés cette année : ${euro(Math.round(10000 * tmiNum / 100))} d'économies immédiates. Le capital sort à la retraite, souvent à un TMI plus faible — et reste hors succession si décès avant retraite.`,
-        economieLabel: `${euro(economie)} d'impôt économisé/an`, economie, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 1 mois',
-        etapes: [
-          "Trouver votre plafond épargne retraite disponible (ligne 6QS de votre avis d'imposition)",
-          "Ouvrir un PER individuel (Linxea Spirit, Nalo, Boursorama Retraite...)",
-          "Verser avant le 31 décembre pour déduire sur l'année fiscale en cours",
-          "Calculer l'arbitrage PER vs assurance-vie selon votre horizon de retraite"
-        ],
-        partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
-      });
-    }
-    // Dirigeant : Dutreil
-    if (alertes.some(a => a.includes('dutreil'))) {
-      actions.push({
-        urgence: 'orange', titreGenerique: 'Pacte Dutreil',
-        titre: "Anticiper la transmission d'entreprise — Pacte Dutreil",
-        description: "Le Pacte Dutreil permet de transmettre votre entreprise avec 75% d'exonération de droits. Mais l'engagement collectif de conservation doit durer 2 ans minimum avant la transmission. Plus vous attendez, plus vous perdez en flexibilité sur le timing.",
-        economieLabel: "75% d'exonération sur la valeur de l'entreprise", economie: 0, coutLabel: '~1 000€ (avocat + notaire)', cout: 1000, delai: '< 6 mois',
-        etapes: [
-          "Faire évaluer la société par un expert-comptable ou commissaire aux comptes",
-          "Identifier les associés éligibles pour l'engagement collectif (2 ans minimum)",
-          "Préparer la transmission via donation ou cession aux héritiers",
-          "Formaliser avec un avocat fiscaliste spécialisé Dutreil"
-        ],
-        partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' }
-      });
-    }
-    // Immo locatif + TMI ≥ 30% : LMNP ou déficit foncier
-    if (hasLocatif && tmiNum >= 30) {
-      actions.push({
-        urgence: 'orange', titreGenerique: 'Optimisation locatif',
-        titre: 'Optimiser la fiscalité de votre bien locatif',
-        description: `En location nue, vos revenus fonciers sont taxés à ${tmiNum}% + 17,2% de prélèvements sociaux. Le passage en LMNP (location meublée) permet d'amortir le bien comptablement et de ramener vos revenus locatifs imposables à zéro — sans changer vos loyers réels.`,
-        economieLabel: 'Revenus locatifs défiscalisés', economie: 0, coutLabel: '~500€ (expert-comptable)', cout: 500, delai: '< 6 mois',
-        etapes: [
-          "Vérifier la faisabilité du passage en meublé (bail, règlement de copropriété)",
-          "Mandater un expert-comptable pour établir un tableau d'amortissement",
-          "Calculer le déficit foncier reportable si location nue maintenue (imputable 10 700€/an sur revenus globaux)",
-          "Arbitrer LMNP amortissement vs déficit foncier selon votre TMI et votre horizon de détention"
-        ],
-        partenaire: { nom: 'Cabinet Montaigne Fiscal', type: 'Fiscaliste partenaire', disponibilite: 'Sous 72h' }
-      });
-    }
-    // PEA si non ouvert — démarrer l'horloge fiscale
-    if (!peaOuvert && patrimoine > 0) {
-      actions.push({
-        urgence: 'vert', titreGenerique: 'PEA',
-        titre: 'Ouvrir un PEA — déclencher l\'horloge fiscale maintenant',
-        description: "Après 5 ans, les plus-values de votre PEA sont exonérées d'impôt (hors prélèvements sociaux 17,2%). Plafond : 150 000€/personne. L'horloge fiscale commence à la date d'ouverture — un versement symbolique aujourd'hui vous met en avance sur la fiscalité de demain.",
-        economieLabel: 'Plus-values exonérées après 5 ans', economie: 0, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 1 mois',
-        etapes: [
-          "Ouvrir un PEA en ligne (Fortuneo, Boursorama, Bourse Direct — 0€ de frais d'ouverture)",
-          "Verser même un montant symbolique (1€ suffit) pour démarrer l'horloge fiscale",
-          "Investir progressivement en ETF World pour optimiser le couple risque/rendement",
-          "Maximiser avant 150 000€ avant tout autre véhicule d'investissement boursier"
-        ],
-        partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
-      });
-    }
-  }
-
-  // ── Clause bénéficiaire AV — révision si standard ou inconnue ────────────
-  if (hasAV) {
-    const avAssets = (userProfile?.actifs || []).filter(a => a.type === 'Assurance-vie');
-    const hasClauseStandard = avAssets.some(a => a.av_clause === 'standard');
-    // Signal si clause standard ET situation complexe (mariage, famille recomposée, PACS)
-    const situationComplexe = ['marie', 'pacse'].includes(situation) || userProfile?.famille_recomposee;
-    if (hasClauseStandard && situationComplexe) {
-      actions.push({
-        urgence: 'orange', titreGenerique: 'Clause bénéficiaire AV',
-        titre: 'Réviser la clause bénéficiaire de votre assurance-vie',
-        description: "La clause standard 'mon conjoint à défaut mes enfants à parts égales' peut devenir inadaptée après un mariage, une naissance ou un remariage. Une clause sur mesure protège précisément les bonnes personnes — et peut intégrer un démembrement (usufruit conjoint / nue-propriété enfants) pour optimiser la transmission.",
-        economieLabel: 'Protection des bénéficiaires', economie: 0, coutLabel: '~150€ (notaire) ou gratuit (assureur)', cout: 0, delai: '< 1 mois',
-        etapes: [
-          "Demander à l'assureur le texte exact de votre clause bénéficiaire actuelle",
-          "Vérifier l'adéquation avec votre situation familiale (mariage, enfants, remariage)",
-          "Rédiger une clause sur mesure — envisager le démembrement de clause pour famille recomposée",
-          "Réviser à chaque changement de situation (naissance, divorce, remariage)"
-        ],
-        partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire partenaire', disponibilite: 'Sous 1 semaine' }
-      });
-    }
-  }
-
-  // ── Démembrement usufruit/nue-propriété — Focus B, si conditions réunies ──
-  if ((focus === 'succession' || focus === 'les_deux') && nbEnfants > 0) {
-    const userAge  = userProfile?.age || 45;
-    const hasImmoHorsRP = (userProfile?.actifs || []).some(
-      a => a.categorie === 'immobilier' && a.type !== 'Résidence principale'
-    );
-    if (userAge >= 51 && userAge <= 80 && hasImmoHorsRP) {
-      const tauxNP     = calcTauxNuePropriete(userAge);
-      const immoHorsRP = (userProfile?.actifs || [])
-        .filter(a => a.categorie === 'immobilier' && a.type !== 'Résidence principale')
-        .reduce((s, a) => s + (a.valeur || 0), 0);
-      if (immoHorsRP > 150000) {
-        const partParEnfant = Math.round(immoHorsRP / nbEnfants);
-        const droitsSansAction = calcDroitsBareme(Math.max(0, partParEnfant - 100000)) * nbEnfants;
-        const valeurNPParEnfant = Math.round(partParEnfant * tauxNP);
-        const droitsDemembrement = calcDroitsBareme(Math.max(0, valeurNPParEnfant - 100000)) * nbEnfants;
-        const economie = Math.max(0, droitsSansAction - droitsDemembrement);
-        actions.push({
-          urgence: 'orange', titreGenerique: 'Démembrement',
-          titre: `Donation en nue-propriété — droits sur ${Math.round(tauxNP * 100)}% de la valeur`,
-          description: `À ${userAge} ans, la nue-propriété de vos biens immo locatifs vaut ${Math.round(tauxNP * 100)}% de leur valeur (art. 669 CGI). En donnant la NP maintenant (vous gardez l'usufruit = les loyers), les droits ne portent que sur cette valeur réduite. À votre décès, vos enfants récupèrent la pleine propriété sans droits supplémentaires.`,
-          economieLabel: economie > 0 ? `${euro(economie)} vs donation pleine propriété` : `Droits sur ${Math.round(tauxNP * 100)}% de la valeur`,
-          economie, coutLabel: '~600–1 000€ (notaire)', cout: 800, delai: '< 12 mois',
-          etapes: [
-            "Identifier les biens transmissibles en NP (locatif prioritairement — gardez la jouissance de la RP)",
-            `Valoriser la NP : ${Math.round(tauxNP * 100)}% de la valeur vénale (votre âge : ${userAge} ans)`,
-            "Abattement de 100 000€ par enfant s'applique sur la valeur de la NP (pas sur la valeur pleine)",
-            "Anticiper avant une revalorisation du bien — geler la valeur d'assiette aujourd'hui"
-          ],
-          partenaire: { nom: 'Étude Lefebvre & Associés', type: 'Notaire patrimonial partenaire', disponibilite: 'Sous 1 semaine' }
-        });
-      }
-    }
-  }
-
-  // ── AV — levier universel si non ouvert ──────────────────────────────────
-  if (!hasAV && patrimoine > 0) {
-    actions.push({
-      urgence: 'vert', titreGenerique: 'Assurance-vie',
-      titre: 'Ouvrir une assurance-vie — 152 500€ hors succession par bénéficiaire',
-      description: "L'assurance-vie est le levier successoral le plus puissant en France. Les sommes versées avant 70 ans sortent hors succession : 152 500€ exonérés par bénéficiaire désigné. La clause bénéficiaire, rédigée sur mesure, peut protéger un concubin, équilibrer entre enfants, ou favoriser un proche.",
-      economieLabel: "152 500€/bénéficiaire transmissibles hors succession", economie: 0, coutLabel: 'Gratuit (ouverture)', cout: 0, delai: '< 3 mois',
-      etapes: [
-        "Ouvrir un contrat multisupport chez un assureur sérieux (Linxea, Boursorama Vie, Suravenir)",
-        "Rédiger une clause bénéficiaire sur mesure — éviter la clause standard 'mon conjoint, à défaut mes enfants'",
-        "Alimenter avant 70 ans pour bénéficier du plein abattement de 152 500€",
-        "Réviser la clause à chaque changement de situation familiale (mariage, divorce, naissance)"
-      ],
-      partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
-    });
-  }
-
-  // ── Fallback si aucune action spécifique ─────────────────────────────────
-  if (actions.length === 0) {
-    actions.push({
-      urgence: 'vert', titreGenerique: 'Bilan patrimonial',
-      titre: 'Planifier un bilan patrimonial annuel',
-      description: "Votre situation ne présente pas de signal d'alerte immédiat. Un bilan patrimonial annuel avec un conseiller permet d'anticiper les évolutions législatives, les changements de situation familiale ou professionnelle, et d'adapter votre stratégie en continu.",
-      economieLabel: 'Stratégie patrimoniale proactive', economie: 0, coutLabel: '~500€/an (CGP)', cout: 500, delai: '< 6 mois',
-      etapes: null, partenaire: { nom: 'Altus Patrimoine', type: 'Conseiller en gestion de patrimoine partenaire', disponibilite: 'Disponible immédiatement' }
-    });
-  }
-
-  const ordre = { rouge: 0, orange: 1, vert: 2 };
-  actions.sort((a, b) => (ordre[a.urgence] ?? 3) - (ordre[b.urgence] ?? 3));
-  return actions.slice(0, 3);
-};
-
-// ── Scénarios comparatifs ────────────────────────────────────────────────────
-// 3 scénarios nommés avec calculs réels : statu quo, AV seule, AV + don familial
-const generateScenarios = (userProfile, patrimoine, isFocusA) => {
-  const nbEnfants      = userProfile?.enfants || 0;
-  const fratrie        = userProfile?.famille?.fratrie || [];
-  const nbHeritiers    = Math.max(1, fratrie.length + 1); // user + fratrie
-  const nbParentsEnVie = Math.max(1, userProfile?.famille?.nb_parents_en_vie ?? 1);
-  const now            = new Date().getFullYear();
-
-  if (isFocusA) {
-    const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
-    if (patrimoineParents === 0) return null;
-
-    // ── Abattement résiduel : déduire les donations récentes (< 15 ans) ───────
-    // "de": "parent", "vers": "user", montant connu → consomme l'abattement
-    const donationsParentsVersUser = (userProfile?.succession?.donations_passees || [])
-      .filter(d => d.de === 'parent' && d.vers === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
-    const montantConsomme  = donationsParentsVersUser.reduce((s, d) => s + (d.montant || 0), 0);
-    const abattementBrut   = 100000 * nbParentsEnVie;
-    const abattement       = Math.max(0, abattementBrut - montantConsomme);
-    const abattementReduit = montantConsomme > 0;
-
-    const partUser = Math.round(patrimoineParents / nbHeritiers);
-
-    // Scénario 1 — Statu quo
-    const droits1 = calcDroitsBareme(Math.max(0, partUser - abattement));
-
-    // Scénario 2 — AV des parents (152 500€/bénéficiaire hors succession avant 70 ans)
-    const avParents = Math.min(patrimoineParents * 0.30, 152500);
-    const part2     = Math.round(Math.max(0, patrimoineParents - avParents) / nbHeritiers);
-    const droits2   = calcDroitsBareme(Math.max(0, part2 - abattement));
-
-    // Scénario 3 — Démembrement (si âge parent favorable) OU AV + don familial
-    const pereAge  = userProfile?.famille?.pere_age;
-    const mereAge  = userProfile?.famille?.mere_age;
-    // Prendre l'âge du parent le plus jeune comme usufruitier potentiel
-    const ageUsufr = (pereAge && mereAge) ? Math.min(pereAge, mereAge) : (pereAge || mereAge || null);
-    const tauxNP   = ageUsufr ? calcTauxNuePropriete(ageUsufr) : null;
-    const useDemembrement = tauxNP !== null && ageUsufr > 50 && ageUsufr <= 80 && patrimoineParents > 200000;
-
-    let scenario3;
-    if (useDemembrement) {
-      // Démembrement : droits calculés sur la valeur de la nue-propriété uniquement
-      const valeurNP  = Math.round(partUser * tauxNP);
-      const droits3   = calcDroitsBareme(Math.max(0, valeurNP - abattement));
-      scenario3 = {
-        nom: 'Donation en nue-propriété',
-        droits: droits3,
-        economie: Math.max(0, droits1 - droits3),
-        description: `À ${ageUsufr} ans, la nue-propriété vaut ${Math.round(tauxNP * 100)}% de la valeur vénale (art. 669 CGI). Vos parents gardent l'usufruit (revenus, usage), vous recevez la NP — droits sur ${euro(valeurNP)} seulement. À leur décès : pleine propriété sans droits supplémentaires.`,
-        leviers: [`NP = ${Math.round(tauxNP * 100)}% (parent ${ageUsufr} ans)`, 'Pleine propriété sans droits au décès'],
-        highlight: true,
-        noteDemembrement: true,
-      };
-    } else {
-      // AV + don familial (levier par défaut)
-      const donFamilial = 31865 * nbParentsEnVie;
-      const part3  = Math.round(Math.max(0, patrimoineParents - avParents - donFamilial) / nbHeritiers);
-      const droits3 = calcDroitsBareme(Math.max(0, part3 - abattement));
-      scenario3 = {
-        nom: 'AV + don familial',
-        droits: droits3,
-        economie: Math.max(0, droits1 - droits3),
-        description: `AV + don familial en numéraire (${euro(31865)} par donateur si < 80 ans, cumulable avec les 100 000€ d'abattement).${abattementReduit ? ` ⚠ Abattement réduit à ${euro(abattement)} (donation antérieure prise en compte).` : ''}`,
-        leviers: ['Assurance-vie', `Don familial ${euro(31865)}/donateur`],
-        highlight: true,
-      };
-    }
-
-    return [
-      {
-        nom: 'Statu quo',
-        droits: droits1,
-        economie: 0,
-        description: `Aucune action. Votre part : ${euro(partUser)}. Abattement : ${euro(abattement)}${abattementReduit ? ` (réduit — donation antérieure de ${euro(montantConsomme)} < 15 ans)` : ` (${nbParentsEnVie} parent${nbParentsEnVie > 1 ? 's' : ''} × 100 000€)`}.`,
-        leviers: [],
-        highlight: false,
-      },
-      {
-        nom: 'Assurance-vie des parents',
-        droits: droits2,
-        economie: Math.max(0, droits1 - droits2),
-        description: `Vos parents alimentent leur AV avant 70 ans — ${euro(avParents)} sortent hors succession (152 500€ exonérés par bénéficiaire désigné).`,
-        leviers: ['AV des parents avant 70 ans'],
-        highlight: false,
-      },
-      scenario3,
-    ];
-
-  } else {
-    // Focus B / standard — succession de l'user vers ses enfants/héritiers
-    const baseSuccession = calcBaseSuccession(patrimoine, userProfile?.actifs);
-    if (baseSuccession === 0 || nbEnfants === 0) return null;
-
-    // ── Abattement résiduel — donations de l'user vers ses enfants < 15 ans ──
-    const donationsUserVersEnfants = (userProfile?.succession?.donations_passees || [])
-      .filter(d => d.de === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
-    const montantConsomme  = donationsUserVersEnfants.reduce((s, d) => s + (d.montant || 0), 0) / Math.max(nbEnfants, 1);
-    const abattementResiduel = Math.max(0, 100000 - montantConsomme);
-    const abattementReduit = montantConsomme > 0;
-
-    const partParEnfant = Math.round(baseSuccession / nbEnfants);
-
-    // Scénario 1 — Statu quo
-    const droits1 = calcDroitsBareme(Math.max(0, partParEnfant - abattementResiduel)) * nbEnfants;
-
-    // Scénario 2 — Avec AV (152 500€/bénéficiaire hors succession)
-    const avCapacite = Math.min(baseSuccession * 0.35, 152500 * nbEnfants);
-    const masse2     = Math.max(0, baseSuccession - avCapacite);
-    const part2      = Math.round(masse2 / nbEnfants);
-    const droits2    = calcDroitsBareme(Math.max(0, part2 - abattementResiduel)) * nbEnfants;
-
-    // Scénario 3 — AV + don familial (31 865€/enfant si user < 80 ans)
-    const userAge     = userProfile?.age || 45;
-    const donFamilial = userAge < 80 ? 31865 * nbEnfants : 0;
-    const masse3  = Math.max(0, baseSuccession - avCapacite - donFamilial);
-    const part3   = Math.round(masse3 / nbEnfants);
-    const droits3 = calcDroitsBareme(Math.max(0, part3 - abattementResiduel)) * nbEnfants;
-
-    return [
-      {
-        nom: 'Statu quo',
-        droits: droits1,
-        economie: 0,
-        description: `${nbEnfants} enfant${nbEnfants > 1 ? 's' : ''}, abattement ${euro(abattementResiduel)}/enfant${abattementReduit ? ' (réduit — donation antérieure prise en compte)' : ''}. Base taxable par enfant : ${euro(Math.max(0, partParEnfant - abattementResiduel))}.`,
-        leviers: [],
-        highlight: false,
-      },
-      {
-        nom: 'Avec assurance-vie',
-        droits: droits2,
-        economie: Math.max(0, droits1 - droits2),
-        description: `152 500€ par bénéficiaire passent hors succession. La base taxable est réduite de ${euro(avCapacite)}.`,
-        leviers: [`AV — 152 500€ × ${nbEnfants} enfant${nbEnfants > 1 ? 's' : ''}`],
-        highlight: false,
-      },
-      {
-        nom: userAge < 80 ? 'AV + don familial' : 'AV seule (don familial indisponible)',
-        droits: droits3,
-        economie: Math.max(0, droits1 - droits3),
-        description: userAge < 80
-          ? `AV + don familial (${euro(31865)}/enfant), cumulable avec les ${euro(abattementResiduel)} d'abattement disponible.`
-          : `Le don familial n'est plus disponible après 80 ans. L'assurance-vie reste le levier principal.`,
-        leviers: userAge < 80
-          ? ['Assurance-vie', `Don familial ${euro(31865)}/enfant`]
-          : ['Assurance-vie'],
-        highlight: true,
-      },
-    ];
-  }
-};
-
-// ── Calendrier patrimonial ───────────────────────────────────────────────────
-// Actions time-sensitive avec deadlines réelles (AV avant 70, don familial avant 80,
-// PER avant 31/12, renouvellement abattement 15 ans)
-const generateTimeline = (userProfile) => {
-  const items  = [];
-  const now    = new Date().getFullYear();
-  const userAge  = userProfile?.age || 45;
-  const pereAge         = userProfile?.famille?.pere_age || null;
-  const mereAge         = userProfile?.famille?.mere_age || null;
-  const gpMaternelsAge  = userProfile?.famille?.gp_maternels_age || null;
-  const gpPaternelsAge  = userProfile?.famille?.gp_paternels_age || null;
-  const tmiNum   = parseInt(userProfile?.optimisation?.tmi) || 0;
-  const revenus  = userProfile?.optimisation?.revenus_annuels_foyer || 0;
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert   = dispositifs.some(d => d.toLowerCase().includes('per'));
-  const hasAV       = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
-  const donationsPassees = userProfile?.succession?.donations_passees || [];
-
-  // 1. AV de l'utilisateur — alimenter avant 70 ans
-  const anneeAV70User = now + Math.max(0, 70 - userAge);
-  if (userAge < 70) {
-    const restant = 70 - userAge;
-    items.push({
-      annee: anneeAV70User,
-      label: `Avant ${anneeAV70User}`,
-      urgence: restant <= 3 ? 'rouge' : restant <= 8 ? 'orange' : 'vert',
-      titre: hasAV ? 'Alimenter votre assurance-vie avant 70 ans' : 'Ouvrir et alimenter une assurance-vie avant 70 ans',
-      description: `Avant 70 ans : 152 500€ exonérés par bénéficiaire. Après 70 ans : abattement global réduit à 30 500€ pour tous bénéficiaires confondus. ${restant <= 3 ? '⚠ Fenêtre fiscale très proche.' : `Il vous reste ${restant} ans.`}`,
-      type: 'deadline_fiscale',
-    });
-  }
-
-  // 2. PER — avant 31 décembre de l'année en cours
-  if (!perOuvert && tmiNum >= 30 && revenus > 0) {
-    const economiePER = Math.round(Math.min(revenus * 0.10, 10000) * (tmiNum / 100));
-    items.push({
-      annee: now,
-      label: `31 décembre ${now}`,
-      urgence: 'orange',
-      titre: `Ouvrir et alimenter un PER — ${euro(economiePER)} d'impôt en moins`,
-      description: `Les versements sont déductibles du revenu imposable de l'année en cours. À ${tmiNum}% de TMI, 10 000€ versés = ${euro(economiePER)} d'économies sur votre prochaine déclaration. Délai strict : 31 décembre.`,
-      type: 'deadline_fiscale',
-    });
-  }
-
-  // 3. AV des parents — alimenter avant 70 ans (chaque parent)
-  [['père', pereAge], ['mère', mereAge]].forEach(([parent, age]) => {
-    if (!age || age >= 70) return;
-    const restant = 70 - age;
-    const annee = now + restant;
-    items.push({
-      annee,
-      label: `Avant ${annee} (${parent} actuellement ${age} ans)`,
-      urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
-      titre: `Assurance-vie de votre ${parent} — alimenter avant ses 70 ans`,
-      description: `Les primes versées par votre ${parent} avant 70 ans bénéficient de l'abattement de 152 500€ par bénéficiaire désigné. C'est l'un des leviers les plus puissants pour une transmission hors succession. ${restant <= 3 ? `⚠ Urgence : ${restant} an${restant > 1 ? 's' : ''} seulement.` : `Il reste ${restant} ans.`}`,
-      type: 'deadline_fiscale',
-    });
-  });
-
-  // 4. Don familial — avant 80 ans du donateur
-  [['père', pereAge], ['mère', mereAge]].forEach(([parent, age]) => {
-    if (!age || age >= 80) return;
-    const restant = 80 - age;
-    const annee = now + restant;
-    items.push({
-      annee,
-      label: `Avant ${annee} (${parent} actuellement ${age} ans)`,
-      urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
-      titre: `Don familial de votre ${parent} — avant ses 80 ans`,
-      description: `Votre ${parent} peut donner 31 865€ en numéraire, sans droits, cumulable avec les 100 000€ d'abattement standard. Après 80 ans, ce mécanisme n'est plus disponible. ${restant <= 3 ? `⚠ Urgence : ${restant} an${restant > 1 ? 's' : ''} seulement.` : ''}`,
-      type: 'deadline_fiscale',
-    });
-  });
-
-  // 5. GP — AV avant 70 ans + don familial avant 80 ans
-  [['maternels', gpMaternelsAge], ['paternels', gpPaternelsAge]].forEach(([cote, age]) => {
-    if (!age) return;
-    if (age < 70) {
-      const restant = 70 - age;
-      items.push({
-        annee: now + restant,
-        label: `Avant ${now + restant} (GP ${cote} ~ ${age} ans)`,
-        urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
-        titre: `Assurance-vie de vos grands-parents ${cote} — alimenter avant 70 ans`,
-        description: `Les primes versées avant 70 ans bénéficient de l'abattement de 152 500€ par bénéficiaire désigné. Après 70 ans, l'avantage fiscal est considérablement réduit. ${restant <= 3 ? `⚠ Seulement ${restant} an${restant > 1 ? 's' : ''}.` : ''}`,
-        type: 'deadline_fiscale',
-      });
-    }
-    if (age < 80) {
-      const restant = 80 - age;
-      items.push({
-        annee: now + restant,
-        label: `Avant ${now + restant} (GP ${cote} ~ ${age} ans)`,
-        urgence: restant <= 3 ? 'rouge' : restant <= 7 ? 'orange' : 'vert',
-        titre: `Don familial de vos grands-parents ${cote} — avant leurs 80 ans`,
-        description: `Vos grands-parents ${cote} peuvent donner 31 865€ en numéraire sans droits, cumulable avec l'abattement de 31 786€ GP→petit-enfant. Ce mécanisme expire à 80 ans.`,
-        type: 'deadline_fiscale',
-      });
-    }
-  });
-
-  // 6. Renouvellement abattement 15 ans (donations passées)
-  donationsPassees.forEach(d => {
-    if (!d.annee) return;
-    const anneeRenouvellement = d.annee + 15;
-    if (anneeRenouvellement < now || anneeRenouvellement > now + 12) return;
-    const ans = anneeRenouvellement - now;
-    items.push({
-      annee: anneeRenouvellement,
-      label: `${anneeRenouvellement}${ans > 0 ? ` (dans ${ans} an${ans > 1 ? 's' : ''})` : ' (cette année)'}`,
-      urgence: ans <= 1 ? 'orange' : 'vert',
-      titre: `Abattement de 100 000€ renouvelé — fenêtre fiscale en ${anneeRenouvellement}`,
-      description: `La donation reçue en ${d.annee} a consommé votre abattement de 100 000€. Il se renouvelle intégralement en ${anneeRenouvellement}. Une nouvelle donation sans droits sera de nouveau possible — à anticiper avec le donateur.`,
-      type: 'renouvellement',
-    });
-  });
-
-  // Tri : urgence d'abord, puis chronologique
-  const ordreUrgence = { rouge: 0, orange: 1, vert: 2 };
-  items.sort((a, b) => {
-    const du = (ordreUrgence[a.urgence] ?? 3) - (ordreUrgence[b.urgence] ?? 3);
-    return du !== 0 ? du : a.annee - b.annee;
-  });
-
-  return items;
-};
+import { Badge, Skeleton, Modal, urgenceColor } from './Shared.jsx';
+import { computeUserCalculs, computeFocusACalculs, calcBaseIFI, calcTauxNuePropriete } from '../engine/calculs.js';
+import { generateUserActions } from '../engine/actions.js';
+import { generateScenarios, generateTimeline } from '../engine/scenarios.js';
 
 export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   // Ouvre le bon onglet selon le focus choisi par l'user en Phase 2 de l'audit
@@ -948,7 +127,7 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   const scenarios  = isUserPov ? generateScenarios(userProfileForPov, patrimoine, isFocusA) : null;
   const timeline   = isUserPov ? generateTimeline(userProfileForPov) : [];
 
-  // Freemium — hardcodé false en V1, à connecter au vrai état d'abonnement
+  // Freemium — hardcodé false en V1 (TODO : connecter à l'état d'abonnement Supabase)
   const isNessoPlus = false;
   const NessoBadge = () => (
     <span style={{ background: '#1B2B4B', color: '#C9A96E', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, letterSpacing: '0.06em', verticalAlign: 'middle', marginLeft: 6 }}>NESSO+</span>
@@ -962,6 +141,30 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
 
   const scoreColor = calculs.score > 70 ? '#E24B4A' : calculs.score > 50 ? '#F59E0B' : '#10B981';
   const scoreLabel = calculs.score > 70 ? 'Risque élevé' : calculs.score > 50 ? 'Risque modéré' : 'Risque faible';
+
+  // ── Composant interne : liste des leviers d'une action ─────────────────────
+  // Dédupliqué : utilisé identiquement dans l'onglet succession et optimisation
+  const LeviersList = ({ list }) => (
+    <div style={{ background: '#FAFAF9', border: '1px solid #F0EBE4', borderRadius: 10, padding: 18, marginBottom: 20 }}>
+      <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
+        Économies possibles — détail par action
+      </p>
+      {list.map((a, i) => {
+        const uColor = urgenceColor(a.urgence);
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: i < list.length - 1 ? 10 : 0, marginBottom: i < list.length - 1 ? 10 : 0, borderBottom: i < list.length - 1 ? '1px dashed #EDE8E3' : 'none' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1 }}>
+              <span style={{ color: uColor, fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>●</span>
+              <span style={{ color: '#374151', fontSize: 13 }}>{a.titre}</span>
+            </div>
+            <span style={{ color: a.economie > 0 ? '#C9A96E' : '#7A7A8C', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {a.economie > 0 ? euro(a.economie) : a.economieLabel}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', padding: '36px 24px 100px' }} className="fade-in">
@@ -1080,7 +283,7 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                     {[
                       { label: 'Patrimoine parents estimé', val: euro(calculs.focusA.patrimoineParents) },
                       { label: 'Votre part', val: `${euro(calculs.focusA.partUser)} (1/${calculs.focusA.nbHeritiers} héritier${calculs.focusA.nbHeritiers > 1 ? 's' : ''})` },
-                      { label: 'Abattement disponible', val: `${euro(calculs.focusA.abattementTotal)} (${calculs.focusA.nbParentsEnVie} parent${calculs.focusA.nbParentsEnVie > 1 ? 's' : ''} × 100 000€)` },
+                      { label: 'Abattement disponible', val: calculs.focusA.nbParentsEnVie > 0 ? `${euro(calculs.focusA.abattementTotal)} (${calculs.focusA.nbParentsEnVie} parent${calculs.focusA.nbParentsEnVie > 1 ? 's' : ''} × 100 000€)` : 'Aucun (aucun parent en vie)' },
                     ].map(({ label, val }) => (
                       <span key={label} style={{ color: '#7A7A8C', fontSize: 12 }}>
                         <span style={{ color: '#1B2B4B', fontWeight: 600 }}>{val}</span> {label}
@@ -1124,24 +327,8 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                 ))}
               </div>
 
-              {/* Détail par levier */}
-              <div style={{ background: '#FAFAF9', border: '1px solid #F0EBE4', borderRadius: 10, padding: 18, marginBottom: 24 }}>
-                <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Comment on y arrive — détail par levier</p>
-                {actions.map((a, i) => {
-                  const urgenceColor = a.urgence === 'rouge' ? '#E24B4A' : a.urgence === 'orange' ? '#F59E0B' : '#10B981';
-                  return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: i < actions.length - 1 ? 10 : 0, marginBottom: i < actions.length - 1 ? 10 : 0, borderBottom: i < actions.length - 1 ? '1px dashed #EDE8E3' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1 }}>
-                        <span style={{ color: urgenceColor, fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>●</span>
-                        <span style={{ color: '#374151', fontSize: 13 }}>{a.titre}</span>
-                      </div>
-                      <span style={{ color: a.economie > 0 ? '#C9A96E' : '#7A7A8C', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        {a.economie > 0 ? euro(a.economie) : a.economieLabel}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              {/* Détail par levier — succession */}
+              <LeviersList list={actions} />
 
               <div>
                 <p style={{ color: '#7A7A8C', fontSize: 13, marginBottom: 16, fontWeight: 500 }}>Comparatif visuel</p>
@@ -1181,26 +368,9 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                   </div>
                 ))}
               </div>
-              {/* Détail par levier — optimisation */}
-              <div style={{ background: '#FAFAF9', border: '1px solid #F0EBE4', borderRadius: 10, padding: 18, marginBottom: 20 }}>
-                <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>Économies possibles — détail par action</p>
-                {actions.map((a, i) => {
-                  const urgenceColor = a.urgence === 'rouge' ? '#E24B4A' : a.urgence === 'orange' ? '#F59E0B' : '#10B981';
-                  return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, paddingBottom: i < actions.length - 1 ? 10 : 0, marginBottom: i < actions.length - 1 ? 10 : 0, borderBottom: i < actions.length - 1 ? '1px dashed #EDE8E3' : 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flex: 1 }}>
-                        <span style={{ color: urgenceColor, fontSize: 16, lineHeight: 1, flexShrink: 0, marginTop: 1 }}>●</span>
-                        <div>
-                          <span style={{ color: '#374151', fontSize: 13 }}>{a.titre}</span>
-                        </div>
-                      </div>
-                      <span style={{ color: a.economie > 0 ? '#10B981' : '#7A7A8C', fontWeight: a.economie > 0 ? 700 : 400, fontSize: 13, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                        {a.economie > 0 ? `+ ${euro(a.economie)}` : a.economieLabel}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+
+              {/* Détail par levier — optimisation (même composant) */}
+              <LeviersList list={actions} />
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div style={{ background: '#F9FAFB', borderRadius: 10, padding: 20 }}>
@@ -1303,7 +473,7 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
           <div style={{ marginBottom: 20 }}>
             <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 4px' }}>Scénarios comparatifs</h2>
             <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0 }}>
-              {isFocusA ? 'Droits à régler selon le niveau d\'organisation de vos parents' : 'Droits de succession selon vos actions'}
+              {isFocusA ? "Droits à régler selon le niveau d'organisation de vos parents" : 'Droits de succession selon vos actions'}
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
@@ -1365,7 +535,7 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {timeline.map((item, i) => {
-              const urgenceColor  = item.urgence === 'rouge' ? '#E24B4A' : item.urgence === 'orange' ? '#F59E0B' : '#10B981';
+              const uColor  = urgenceColor(item.urgence);
               const urgenceBg     = item.urgence === 'rouge' ? '#FEF2F2' : item.urgence === 'orange' ? '#FFFBEB' : '#F0FDF4';
               const urgenceLabel  = item.urgence === 'rouge' ? 'Urgent' : item.urgence === 'orange' ? 'À planifier' : 'Fenêtre ouverte';
               const typeIcon      = item.type === 'renouvellement' ? '🔄' : '📅';
@@ -1374,7 +544,7 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                 <div key={i} style={{ display: 'flex', gap: 16, paddingBottom: isLast ? 0 : 20 }}>
                   {/* Ligne verticale + point */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0, width: 20 }}>
-                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: urgenceColor, flexShrink: 0, marginTop: 3 }} />
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: uColor, flexShrink: 0, marginTop: 3 }} />
                     {!isLast && <div style={{ width: 2, flex: 1, background: '#F0EBE4', marginTop: 4, borderRadius: 1 }} />}
                   </div>
                   {/* Contenu */}
@@ -1384,7 +554,7 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
                           <span style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14 }}>{item.titre}</span>
-                          <span style={{ background: urgenceBg, color: urgenceColor, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: urgenceBg, color: uColor, fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, letterSpacing: '0.06em', whiteSpace: 'nowrap' }}>
                             {urgenceLabel}
                           </span>
                         </div>
@@ -1413,21 +583,9 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 24, textAlign: 'left' }}>
             {[
-              {
-                icon: '🔄',
-                titre: 'Recalcul automatique',
-                desc: 'Vos recommandations se mettent à jour chaque fois que vous ajoutez un actif ou un membre à votre famille. Votre plan reste toujours à jour.',
-              },
-              {
-                icon: '🔔',
-                titre: 'Alertes législatives personnalisées',
-                desc: 'Nesso vous prévient si une loi change et impacte votre situation spécifique — pas une newsletter généraliste, une alerte ciblée sur votre patrimoine.',
-              },
-              {
-                icon: '📄',
-                titre: 'Rapport PDF structuré',
-                desc: 'Un document complet, prêt à apporter à votre notaire ou CGP : patrimoine, recommandations, étapes, chiffres clés.',
-              },
+              { icon: '🔄', titre: 'Recalcul automatique', desc: 'Vos recommandations se mettent à jour chaque fois que vous ajoutez un actif ou un membre à votre famille. Votre plan reste toujours à jour.' },
+              { icon: '🔔', titre: 'Alertes législatives personnalisées', desc: 'Nesso vous prévient si une loi change et impacte votre situation spécifique — pas une newsletter généraliste, une alerte ciblée sur votre patrimoine.' },
+              { icon: '📄', titre: 'Rapport PDF structuré', desc: 'Un document complet, prêt à apporter à votre notaire ou CGP : patrimoine, recommandations, étapes, chiffres clés.' },
             ].map(({ icon, titre, desc }) => (
               <div key={titre} style={{ display: 'flex', gap: 14, background: '#F9F8F6', borderRadius: 10, padding: 16 }}>
                 <span style={{ fontSize: 22, flexShrink: 0 }}>{icon}</span>

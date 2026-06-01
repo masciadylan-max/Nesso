@@ -230,7 +230,6 @@ export default function App() {
     } else {
       LS.set('nesso_user_profile', newProfile);
       LS.set('nesso_user_actifs', userActifs);
-      LS.set('nesso_pov', newPov);
     }
   };
 
@@ -329,7 +328,7 @@ export default function App() {
       )}
 
       <main>
-        {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} />}
+        {view === 'dashboard'       && <Dashboard    pov={pov} actifs={actifs} userProfile={userProfile} onRefairAudit={handleGoToOnboarding} />}
         {view === 'famille'         && <Famille      pov={pov} setPov={setPov} actifs={actifs} userProfile={userProfile} />}
         {view === 'actifs'          && <Actifs       pov={pov} actifs={actifs} setActifs={handleSetActifs} userProfile={userProfile} />}
         {view === 'aide'            && <Aide         pov={pov} actifs={actifs} />}

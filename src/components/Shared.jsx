@@ -1,3 +1,7 @@
+// Couleur associée à un niveau d'urgence — utilisée dans Dashboard et Timeline
+export const urgenceColor = (urgence) =>
+  urgence === 'rouge' ? '#E24B4A' : urgence === 'orange' ? '#F59E0B' : '#10B981';
+
 export const Badge = ({ urgence }) => {
   const cfg = {
     rouge:  { emoji: '🔴', label: 'URGENT',      bg: '#FEF2F2', color: '#991B1B', border: '#FCA5A5' },
