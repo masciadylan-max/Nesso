@@ -69,15 +69,18 @@ const buildContextMessage = (f) => {
       : null,
     ...(Object.keys(f.patrimoine_detail || {}).length > 0 ? [
       hasConjoint ? 'Actifs personnels (avec propriété) :' : 'Actifs personnels :',
-      ...Object.entries(f.patrimoine_detail || {}).map(([key, v]) => {
-        const valStr = v?.valeur ? `${parseInt(v.valeur).toLocaleString('fr-FR')} €` : 'montant à préciser';
-        const propStr = hasConjoint && v?.proprio
-          ? (v.proprio === 'user'      ? ' — à vous seul(e)'
-             : v.proprio === 'conjoint' ? ` — à ${f.conjoint_prenom} uniquement`
-             : ' — aux deux en commun')
-          : '';
-        return `  → ${ASSET_LABELS_CTX[key] || key} : ${valStr}${propStr}`;
-      }),
+      ...Object.entries(f.patrimoine_detail || {}).flatMap(([key, items]) =>
+        (items || []).map((item, idx) => {
+          const valStr = item?.valeur ? `${parseInt(item.valeur).toLocaleString('fr-FR')} €` : 'montant à préciser';
+          const propStr = hasConjoint && item?.proprio
+            ? (item.proprio === 'user'      ? ' — à vous seul(e)'
+               : item.proprio === 'conjoint' ? ` — à ${f.conjoint_prenom} uniquement`
+               : ' — aux deux en commun')
+            : '';
+          const suffix = items.length > 1 ? ` (${idx + 1})` : '';
+          return `  → ${ASSET_LABELS_CTX[key] || key}${suffix} : ${valStr}${propStr}`;
+        })
+      ),
     ] : []),
     f.revenus_foyer ? `Revenus annuels du foyer : ${parseInt(f.revenus_foyer).toLocaleString('fr-FR')} €` : null,
     f.evenement?.trim() ? `Événement de vie : ${f.evenement}` : null,
@@ -957,52 +960,93 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
             {formStep === 4 && (() => {
               const hasConj = form.situation_civile && form.situation_civile !== 'celibataire' && form.conjoint_prenom;
               const ASSET_TYPES = [
-                { key: 'rp',         label: '🏠 Résidence principale',                                       placeholder: 'ex : 350 000' },
-                { key: 'locatif',    label: '🏢 Immobilier locatif',                                         placeholder: 'ex : 200 000' },
-                { key: 'av',         label: '💼 Assurance-vie',                                              placeholder: 'ex : 80 000' },
-                { key: 'pea',        label: '📈 PEA',                                                        placeholder: 'ex : 30 000' },
-                { key: 'per',        label: '🏦 PER (Plan Épargne Retraite)',                                 placeholder: 'ex : 20 000' },
-                { key: 'liquidites', label: '💵 Livrets / Liquidités',                                       placeholder: 'ex : 15 000' },
-                { key: 'financier',  label: '📊 Autres placements (CTO, SCPI…)',                             placeholder: 'ex : 50 000' },
-                { key: 'entreprise', label: '⚙ Entreprise / Parts sociales',                                 placeholder: 'ex : 200 000' },
+                { key: 'rp',         label: '🏠 Résidence principale',                                              placeholder: 'ex : 350 000', single: true },
+                { key: 'locatif',    label: '🏢 Immobilier locatif',                                                placeholder: 'ex : 200 000' },
+                { key: 'av',         label: '💼 Assurance-vie',                                                     placeholder: 'ex : 80 000' },
+                { key: 'pea',        label: '📈 PEA',                                                               placeholder: 'ex : 30 000' },
+                { key: 'per',        label: '🏦 PER (Plan Épargne Retraite)',                                        placeholder: 'ex : 20 000' },
+                { key: 'liquidites', label: '💵 Livrets / Liquidités',                                              placeholder: 'ex : 15 000' },
+                { key: 'financier',  label: '📊 Autres placements (CTO, SCPI…)',                                    placeholder: 'ex : 50 000' },
+                { key: 'entreprise', label: '⚙ Entreprise / Parts sociales',                                        placeholder: 'ex : 200 000' },
                 { key: 'exotique',   label: '💎 Actifs atypiques (art, montres, crypto, cartes, objets de valeur…)', placeholder: 'ex : 10 000' },
-                { key: 'etranger',   label: "🌍 Bien à l'étranger",                                          placeholder: 'ex : 150 000' },
+                { key: 'etranger',   label: "🌍 Bien à l'étranger",                                                 placeholder: 'ex : 150 000' },
               ];
+              const ASSET_ADD_LABEL = {
+                locatif: 'un bien locatif', av: 'une assurance-vie', pea: 'un PEA',
+                per: 'un PER', liquidites: 'un livret / compte', financier: 'un placement',
+                entreprise: 'une société / participation', exotique: 'un actif atypique',
+                etranger: "un bien à l'étranger",
+              };
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>
                     Sélectionnez vos actifs et renseignez un montant estimé. Tout est optionnel — même une approximation aide à calibrer votre tableau de bord.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {ASSET_TYPES.map(({ key, label, placeholder }) => {
-                      const entry = (form.patrimoine_detail || {})[key];
-                      const active = !!entry;
+                    {ASSET_TYPES.map(({ key, label, placeholder, single }) => {
+                      const items = (form.patrimoine_detail || {})[key] || [];
+                      const active = items.length > 0;
                       return (
                         <div key={key}>
                           <button onClick={() => setForm(p => {
                             const d = { ...(p.patrimoine_detail || {}) };
-                            if (d[key]) delete d[key]; else d[key] = { valeur: '', proprio: '' };
+                            if (d[key] && d[key].length > 0) delete d[key];
+                            else d[key] = [{ valeur: '', proprio: '' }];
                             return { ...p, patrimoine_detail: d };
                           })} style={{ width: '100%', padding: '10px 14px', border: `2px solid ${active ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: active ? '8px 8px 0 0' : 8, background: active ? '#F0F4FF' : 'white', color: active ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             {label} {active && <span style={{ color: '#C9A96E' }}>✓</span>}
                           </button>
                           {active && (
-                            <div style={{ border: '2px solid #1B2B4B', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', background: '#F8FAFF', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              <input type="number" placeholder={`Montant estimé (€) — ${placeholder}`} value={entry.valeur || ''}
-                                onChange={e => setForm(p => ({ ...p, patrimoine_detail: { ...p.patrimoine_detail, [key]: { ...entry, valeur: e.target.value } } }))}
-                                style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
-                              {hasConj && (
-                                <div>
-                                  <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px' }}>Appartient à :</p>
-                                  <div style={{ display: 'flex', gap: 6 }}>
-                                    {[['user', 'À moi seul(e)'], ['conjoint', `À ${form.conjoint_prenom}`], ['both', 'Aux deux']].map(([val, lbl]) => (
-                                      <button key={val} onClick={() => setForm(p => ({ ...p, patrimoine_detail: { ...p.patrimoine_detail, [key]: { ...entry, proprio: val } } }))}
-                                        style={{ flex: 1, padding: '7px 4px', border: `2px solid ${entry.proprio === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 7, background: entry.proprio === val ? '#FDF8F0' : 'white', color: entry.proprio === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: entry.proprio === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
-                                        {lbl}
+                            <div style={{ border: '2px solid #1B2B4B', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', background: '#F8FAFF', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                              {items.map((item, idx) => (
+                                <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: idx > 0 ? 8 : 0, borderTop: idx > 0 ? '1px solid #E5E7EB' : 'none' }}>
+                                  {items.length > 1 && (
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                      <span style={{ color: '#A8A8B8', fontSize: 12 }}>N° {idx + 1}</span>
+                                      <button onClick={() => setForm(p => {
+                                        const d = { ...(p.patrimoine_detail || {}) };
+                                        const newItems = d[key].filter((_, i) => i !== idx);
+                                        if (newItems.length === 0) delete d[key]; else d[key] = newItems;
+                                        return { ...p, patrimoine_detail: d };
+                                      })} style={{ background: 'none', border: 'none', color: '#E24B4A', cursor: 'pointer', fontSize: 12, padding: '2px 4px', fontFamily: 'DM Sans, sans-serif' }}>
+                                        × supprimer
                                       </button>
-                                    ))}
-                                  </div>
+                                    </div>
+                                  )}
+                                  <input type="number" placeholder={`Montant estimé (€) — ${placeholder}`} value={item.valeur || ''}
+                                    onChange={e => setForm(p => {
+                                      const d = { ...(p.patrimoine_detail || {}) };
+                                      d[key] = d[key].map((it, i) => i === idx ? { ...it, valeur: e.target.value } : it);
+                                      return { ...p, patrimoine_detail: d };
+                                    })}
+                                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                                  {hasConj && (
+                                    <div>
+                                      <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px' }}>Appartient à :</p>
+                                      <div style={{ display: 'flex', gap: 6 }}>
+                                        {[['user', 'À moi seul(e)'], ['conjoint', `À ${form.conjoint_prenom}`], ['both', 'Aux deux']].map(([val, lbl]) => (
+                                          <button key={val} onClick={() => setForm(p => {
+                                            const d = { ...(p.patrimoine_detail || {}) };
+                                            d[key] = d[key].map((it, i) => i === idx ? { ...it, proprio: val } : it);
+                                            return { ...p, patrimoine_detail: d };
+                                          })}
+                                            style={{ flex: 1, padding: '7px 4px', border: `2px solid ${item.proprio === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 7, background: item.proprio === val ? '#FDF8F0' : 'white', color: item.proprio === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: item.proprio === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                                            {lbl}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
+                              ))}
+                              {!single && (
+                                <button onClick={() => setForm(p => {
+                                  const d = { ...(p.patrimoine_detail || {}) };
+                                  d[key] = [...(d[key] || []), { valeur: '', proprio: '' }];
+                                  return { ...p, patrimoine_detail: d };
+                                })} style={{ padding: '7px 12px', border: '1px dashed #C9A96E', borderRadius: 7, background: 'none', color: '#C9A96E', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', alignSelf: 'flex-start' }}>
+                                  + Ajouter {ASSET_ADD_LABEL[key] || 'un autre'}
+                                </button>
                               )}
                             </div>
                           )}
