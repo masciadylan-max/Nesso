@@ -10,7 +10,7 @@ Compagne/concubin = toujours renseigner le champ 'conjoint' avec son prénom si 
 
 PÉRIMÈTRE PATRIMOINE :
 - Si situation_civile = 'marie' ou 'pacse' : 'actifs' = biens du foyer (user + conjoint). JAMAIS les biens des parents/beaux-parents/fratrie.
-- Si situation_civile = 'concubin' ou 'celibataire' : 'actifs' = UNIQUEMENT les biens propres de l'utilisateur.
+- Si situation_civile = 'concubin' ou 'celibataire' : inclure dans 'actifs' les biens propres de l'utilisateur ET les biens explicitement décrits comme co-détenus ("aux deux"), avec proprietaires = ['user', 'conjoint']. Ne jamais exclure un bien que l'utilisateur a clairement décrit comme lui appartenant, même partiellement. Seuls les biens appartenant exclusivement au partenaire sont exclus.
 - Un héritage attendu n'est PAS un actif actuel.
 
 {
