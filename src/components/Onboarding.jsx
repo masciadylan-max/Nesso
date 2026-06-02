@@ -15,13 +15,13 @@ const FORM_INIT = {
   gp_paternels_age: '', gp_paternels_age2: '',
   patrimoine: '', patrimoine_detail: {}, evenement: '', focus: '',
   // Focus A
-  parents_patrimoine: '', parents_compo: [], gp_patrimoine: '', donations_recues: '',
+  parents_patrimoine: '', parents_compo: [], gp_patrimoine: '', gp_compo: [], donations_recues: '',
   oncles_tantes_maternels: '', oncles_tantes_paternels: '',
   fratrie: '',
   // Focus B
   testament: '', av_existante: '', actifs_type: [],
-  // Focus C
-  statut_pro: '', revenus_foyer: '', per_ouvert: '', pea_ouvert: '',
+  // Focus C + global
+  statut_pro: '', revenus_foyer: '', revenus_user: '', revenus_conjoint: '', revenus_brut_net: 'net', per_ouvert: '', pea_ouvert: '',
 };
 
 const buildContextMessage = (f) => {
@@ -78,17 +78,28 @@ const buildContextMessage = (f) => {
                : ' — aux deux en commun')
             : '';
           const suffix = items.length > 1 ? ` (${idx + 1})` : '';
-          return `  → ${ASSET_LABELS_CTX[key] || key}${suffix} : ${valStr}${propStr}`;
+          const nomStr = key === 'exotique' && item?.nom ? ` "${item.nom}"` : '';
+          return `  → ${ASSET_LABELS_CTX[key] || key}${suffix}${nomStr} : ${valStr}${propStr}`;
         })
       ),
     ] : []),
-    f.revenus_foyer ? `Revenus annuels du foyer : ${parseInt(f.revenus_foyer).toLocaleString('fr-FR')} €` : null,
+    (f.revenus_user || f.revenus_conjoint) ? (() => {
+      const brutNet = f.revenus_brut_net || 'net';
+      const u = parseInt(f.revenus_user) || 0;
+      const c = parseInt(f.revenus_conjoint) || 0;
+      const total = u + c;
+      const detail = u && c
+        ? ` (vous : ${u.toLocaleString('fr-FR')} €${f.conjoint_prenom ? `, ${f.conjoint_prenom} : ${c.toLocaleString('fr-FR')} €` : `, conjoint : ${c.toLocaleString('fr-FR')} €`})`
+        : '';
+      return `Revenus annuels du foyer (${brutNet}) : ${total.toLocaleString('fr-FR')} €${detail}`;
+    })() : f.revenus_foyer ? `Revenus annuels du foyer : ${parseInt(f.revenus_foyer).toLocaleString('fr-FR')} €` : null,
     f.evenement?.trim() ? `Événement de vie : ${f.evenement}` : null,
     focusLabel ? `Focus choisi : ${focusLabel}` : null,
     // Focus A
     f.focus === 'A' && f.parents_patrimoine ? `Patrimoine parents estimé : ${parseInt(f.parents_patrimoine).toLocaleString('fr-FR')} €` : null,
     f.focus === 'A' && f.parents_compo?.length > 0 ? `Composition patrimoine parents : ${f.parents_compo.map(c => ({ rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne / Placements', entreprise: 'Entreprise', etranger: "Bien à l'étranger" })[c] || c).join(', ')}` : null,
     f.focus === 'A' && f.gp_patrimoine ? `Patrimoine grands-parents estimé : ${parseInt(f.gp_patrimoine).toLocaleString('fr-FR')} €` : null,
+    f.focus === 'A' && f.gp_compo?.length > 0 ? `Composition patrimoine grands-parents : ${f.gp_compo.map(c => ({ rp: 'Résidence principale', locatif: 'Immobilier locatif', financier: 'Épargne / Placements', entreprise: 'Entreprise', etranger: "Bien à l'étranger" })[c] || c).join(', ')}` : null,
     f.focus === 'A' && f.donations_recues ? `Donations déjà reçues : ${{ oui: 'Oui', non: 'Non', sais_pas: 'Je ne sais pas' }[f.donations_recues] || f.donations_recues}` : null,
     f.focus === 'A' && f.oncles_tantes_maternels ? `Oncles/tantes côté maternel : ${f.oncles_tantes_maternels}` : null,
     f.focus === 'A' && f.oncles_tantes_paternels ? `Oncles/tantes côté paternel : ${f.oncles_tantes_paternels}` : null,
@@ -1013,6 +1024,15 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                                       </button>
                                     </div>
                                   )}
+                                  {key === 'exotique' && (
+                                    <input type="text" placeholder="Nom de l'actif (ex : Montre Rolex, Tableau, Crypto…)" value={item.nom || ''}
+                                      onChange={e => setForm(p => {
+                                        const d = { ...(p.patrimoine_detail || {}) };
+                                        d[key] = d[key].map((it, i) => i === idx ? { ...it, nom: e.target.value } : it);
+                                        return { ...p, patrimoine_detail: d };
+                                      })}
+                                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                                  )}
                                   <input type="number" placeholder={`Montant estimé (€) — ${placeholder}`} value={item.valeur || ''}
                                     onChange={e => setForm(p => {
                                       const d = { ...(p.patrimoine_detail || {}) };
@@ -1055,15 +1075,39 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                     })}
                   </div>
                   {/* Revenus du foyer — partagés tous focus */}
-                  <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
-                      Revenus annuels du foyer <span style={{ color: '#A8A8B8' }}>(optionnel — même estimés)</span>
-                    </label>
-                    <input type="number" value={form.revenus_foyer || ''} min="0"
-                      onChange={e => setForm(p => ({ ...p, revenus_foyer: e.target.value }))}
-                      placeholder="ex : 80 000"
-                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
-                    <p style={{ color: '#A8A8B8', fontSize: 12, margin: '5px 0 0', lineHeight: 1.5 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label style={{ color: '#6B7280', fontSize: 13 }}>
+                        Revenus annuels <span style={{ color: '#A8A8B8' }}>(optionnel — même estimés)</span>
+                      </label>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        {[['net', 'Net'], ['brut', 'Brut']].map(([val, lbl]) => (
+                          <button key={val} onClick={() => setForm(p => ({ ...p, revenus_brut_net: val }))}
+                            style={{ padding: '4px 10px', border: `1px solid ${form.revenus_brut_net === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 6, background: form.revenus_brut_net === val ? '#1B2B4B' : 'white', color: form.revenus_brut_net === val ? 'white' : '#6B7280', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: hasConj ? '1fr 1fr' : '1fr', gap: 8 }}>
+                      <div>
+                        {hasConj && <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>Vos revenus</label>}
+                        <input type="number" value={form.revenus_user || ''} min="0"
+                          onChange={e => setForm(p => ({ ...p, revenus_user: e.target.value }))}
+                          placeholder="ex : 60 000"
+                          style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                      </div>
+                      {hasConj && (
+                        <div>
+                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>Revenus de {form.conjoint_prenom}</label>
+                          <input type="number" value={form.revenus_conjoint || ''} min="0"
+                            onChange={e => setForm(p => ({ ...p, revenus_conjoint: e.target.value }))}
+                            placeholder="ex : 40 000"
+                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                        </div>
+                      )}
+                    </div>
+                    <p style={{ color: '#A8A8B8', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
                       Permet de calibrer les recommandations fiscales dans votre tableau de bord.
                     </p>
                   </div>
@@ -1125,13 +1169,31 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 </div>
                 {/* Patrimoine GP si en vie */}
                 {((form.gp_maternels && form.gp_maternels !== 'non') || (form.gp_paternels && form.gp_paternels !== 'non')) && (
-                  <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos grands-parents <span style={{ color: '#A8A8B8' }}>(même approximatif)</span></label>
-                    <input type="number" value={form.gp_patrimoine || ''} min="0"
-                      onChange={e => setForm(p => ({ ...p, gp_patrimoine: e.target.value }))}
-                      placeholder="ex : 400 000"
-                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
-                  </div>
+                  <>
+                    <div>
+                      <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos grands-parents <span style={{ color: '#A8A8B8' }}>(même approximatif)</span></label>
+                      <input type="number" value={form.gp_patrimoine || ''} min="0"
+                        onChange={e => setForm(p => ({ ...p, gp_patrimoine: e.target.value }))}
+                        placeholder="ex : 400 000"
+                        style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                    </div>
+                    {form.gp_patrimoine && (
+                      <div>
+                        <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#A8A8B8' }}>(si vous le savez)</span></label>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {[['Immobilier','🏠'],['Épargne / financier','💰'],['Entreprise','🏢'],['Bien étranger','🌍'],['Autre','◇']].map(([lbl, ico]) => {
+                            const sel = (form.gp_compo || []).includes(lbl);
+                            return (
+                              <button key={lbl} onClick={() => setForm(p => ({ ...p, gp_compo: sel ? p.gp_compo.filter(x => x !== lbl) : [...(p.gp_compo||[]), lbl] }))}
+                                style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 20, background: sel ? '#F0F4FF' : 'white', color: sel ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                                {ico} {lbl}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 {/* Oncles / tantes — si GP en vie */}
                 {(form.gp_maternels === 'les_deux' || form.gp_maternels === 'un' || form.gp_paternels === 'les_deux' || form.gp_paternels === 'un') && (
