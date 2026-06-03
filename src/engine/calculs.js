@@ -242,6 +242,38 @@ export const computeUserCalculs = (patrimoine, userProfile) => {
   };
 };
 
+// ── Calcul droits GP → parents de l'utilisateur (maillon "au-dessus") ────────
+// Répond à : "Que paient mes parents quand mes grands-parents décèdent ?"
+// Hypothèse : 2 héritiers directs des GP (les 2 parents de l'user — 1 côté maternel + 1 côté paternel)
+export const computeGPToParentsCalculs = (userProfile) => {
+  const patrimoineGP = userProfile?.famille?.patrimoine_gp_estime || 0;
+  if (!patrimoineGP) return null;
+
+  const nbHeritiers   = 2; // estimation conservative — chaque branche reçoit 50%
+  const partParParent = Math.round(patrimoineGP / nbHeritiers);
+  const abattement    = 100000; // ligne directe GP → enfant (art. 779 CGI)
+
+  const taxableStatuQuo = Math.max(0, partParParent - abattement);
+  const droitsStatusQuo = calcDroitsBareme(taxableStatuQuo) * nbHeritiers;
+
+  // Optimisé : AV des GP (avant 70 ans) + donation de leur vivant
+  const avGPEstimee   = Math.min(patrimoineGP * 0.25, 152500 * nbHeritiers);
+  const masseApresAV  = Math.max(0, patrimoineGP - avGPEstimee);
+  const taxableOpt    = Math.max(0, Math.round(masseApresAV / nbHeritiers) - abattement);
+  const droitsOptimise = calcDroitsBareme(taxableOpt) * nbHeritiers;
+
+  return {
+    droits: { statusQuo: droitsStatusQuo, optimise: droitsOptimise },
+    economieSuccession: Math.max(0, droitsStatusQuo - droitsOptimise),
+    impots: { IR: 0, IFI: 0, PS: 0, total: 0 },
+    economiesAnnuelles: 0,
+    gainDixAns: 0,
+    score: computeScore(userProfile, { patrimoine: patrimoineGP, droitsStatusQuo }),
+    successionEstimee: droitsStatusQuo,
+    focusGP: { patrimoineGP, partParParent, nbHeritiers, abattement },
+  };
+};
+
 // ── Calcul succession montante — Focus A (ce que l'user va recevoir) ─────────
 // Raisonne sur le patrimoine des PARENTS (et des GP si présents),
 // pas sur le patrimoine propre de l'utilisateur.

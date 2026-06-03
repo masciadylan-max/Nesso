@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { CALCULS, ACTIONS } from '../data.js';
 import { euro, getPersonne, getPatrimoine, filterActifsByPov } from '../utils.js';
 import { Badge, Skeleton, Modal, urgenceColor } from './Shared.jsx';
-import { computeUserCalculs, computeFocusACalculs, calcBaseIFI, calcTauxNuePropriete } from '../engine/calculs.js';
+import { computeUserCalculs, computeFocusACalculs, computeGPToParentsCalculs, calcBaseIFI, calcTauxNuePropriete } from '../engine/calculs.js';
 import { generateUserActions } from '../engine/actions.js';
 import { generateScenarios, generateTimeline } from '../engine/scenarios.js';
 
@@ -18,6 +18,25 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
   const [selectedAction, setSelectedAction] = useState(null);
   const [showNessoPlus, setShowNessoPlus] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // ── POV local patrimoine : 'seul' (mes actifs) | 'foyer' (user + conjoint) ──
+  const [patView, setPatView] = useState('seul');
+  // ── Scénario de succession affiché dans l'onglet Succession ─────────────────
+  // 'ma_succession' | 'je_recois_parents' | 'parents_recoivent_gp'
+  const [succScenario, setSuccScenario] = useState('ma_succession');
+
+  // Auto-initialise le scénario selon le focus de l'audit
+  useEffect(() => {
+    const parentsPat     = userProfile?.famille?.patrimoine_parents_estime || 0;
+    const nbParentsEnVie = userProfile?.famille?.nb_parents_en_vie || 0;
+    if (userProfile?.focus_principal === 'Transmission parentale' && parentsPat > 0 && nbParentsEnVie > 0) {
+      setSuccScenario('je_recois_parents');
+    } else {
+      setSuccScenario('ma_succession');
+    }
+  }, [userProfile?.focus_principal, userProfile?.famille?.patrimoine_parents_estime]);
+  // Reset patView à chaque nouvel audit
+  useEffect(() => { setPatView('seul'); }, [userProfile?.prenom]);
 
   // POV 'foyer' = vue consolidée du ménage (user + conjoint)
   const isFoyerPov  = pov === 'foyer' && userProfile;
@@ -104,23 +123,41 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
       }
     : (getPersonne(pov) || { prenom: 'Inconnu', age: null, role: '—', profession: null });
 
-  // Calcul du patrimoine sur les actifs filtrés du POV
+  // Patrimoine user — quote-part de ses actifs propres (base pour les calculs succession)
   const patrimoine = getPatrimoine(pov, povActifs);
   // computeUserCalculs a besoin du userProfile avec les actifs filtrés pour IFI
   const userProfileForPov = isUserPov ? { ...userProfile, actifs: povActifs } : null;
 
-  // Focus A (Transmission parentale) → calcul sur le patrimoine des parents, pas de l'user
-  // Condition robuste : match exact OU fallback si patrimoine perso = 0 et parents ont du patrimoine significatif
-  const patrimoineParentsPourFocusA = userProfile?.famille?.patrimoine_parents_estime || 0;
-  const isFocusA = isUserPov
-    && patrimoineParentsPourFocusA > 0
-    && (
-      userProfile?.focus_principal === 'Transmission parentale'
-      || (patrimoine === 0 && patrimoineParentsPourFocusA > 50000)
-    );
+  // ── POV Patrimoine : seul (actifs user) vs foyer (tous actifs du ménage) ─────
+  const hasConjoint = isUserPov && !!userProfile?.conjoint;
+  // Valeur affichée dans la carte patrimoine (dépend du toggle seul/foyer)
+  const patrimoineCard = isUserPov
+    ? (patView === 'foyer' ? actifs.reduce((s, a) => s + (a.valeur || 0), 0) : patrimoine)
+    : patrimoine;
+
+  // ── Scénarios de succession disponibles ──────────────────────────────────────
+  const canShowParentsScenario = isUserPov
+    && (userProfile?.famille?.patrimoine_parents_estime || 0) > 0
+    && (userProfile?.famille?.nb_parents_en_vie || 0) > 0;
+  const canShowGPScenario = isUserPov
+    && (userProfile?.famille?.patrimoine_gp_estime || 0) > 0
+    && (userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants);
+  const availableSuccScenarios = [
+    { id: 'ma_succession',        label: 'Ma succession' },
+    ...(canShowParentsScenario  ? [{ id: 'je_recois_parents',      label: 'Je reçois de mes parents' }] : []),
+    ...(canShowGPScenario       ? [{ id: 'parents_recoivent_gp',   label: 'Mes parents reçoivent des GP' }] : []),
+  ];
+
+  // isFocusA est maintenant piloté par le scénario sélectionné (pas seulement par le focus de l'audit)
+  const isFocusA = succScenario === 'je_recois_parents';
+  const isGPScenario = succScenario === 'parents_recoivent_gp';
 
   const calculs = isUserPov
-    ? (isFocusA ? computeFocusACalculs(userProfileForPov) : computeUserCalculs(patrimoine, userProfileForPov))
+    ? isFocusA
+      ? computeFocusACalculs(userProfileForPov)
+      : isGPScenario
+        ? (computeGPToParentsCalculs(userProfile) || computeUserCalculs(patrimoine, userProfileForPov))
+        : computeUserCalculs(patrimoine, userProfileForPov)
     : (CALCULS[pov] || CALCULS.lucas);
   const actions = isUserPov ? generateUserActions(userProfileForPov, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
 
@@ -200,17 +237,35 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, marginBottom: 24 }}>
 
         <div className="card" style={{ padding: 24 }}>
-          <p style={{ color: '#7A7A8C', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 10 }}>
-            {isFoyerPov ? 'Patrimoine du foyer' : 'Patrimoine'}
-          </p>
-          {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : patrimoine > 0 ? (
-            <p className="font-serif" style={{ color: '#1B2B4B', fontSize: 38, fontWeight: 700, margin: '0 0 12px' }}>{euro(patrimoine)}</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <p style={{ color: '#7A7A8C', fontSize: 12, fontWeight: 500, letterSpacing: '0.05em', textTransform: 'uppercase', margin: 0 }}>
+              Patrimoine
+            </p>
+            {/* Toggle seul / foyer — uniquement si conjoint */}
+            {hasConjoint && (
+              <div style={{ display: 'flex', gap: 3 }}>
+                {[['seul', 'Vous seul(e)'], ['foyer', 'Foyer']].map(([v, l]) => (
+                  <button key={v} onClick={() => setPatView(v)}
+                    style={{ padding: '3px 9px', border: `1px solid ${patView === v ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 6, background: patView === v ? '#1B2B4B' : 'white', color: patView === v ? 'white' : '#6B7280', cursor: 'pointer', fontSize: 11, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {loading ? <div style={{ marginBottom: 12 }}><Skeleton h={42} /></div> : patrimoineCard > 0 ? (
+            <p className="font-serif" style={{ color: '#1B2B4B', fontSize: 38, fontWeight: 700, margin: '0 0 4px' }}>{euro(patrimoineCard)}</p>
           ) : (
-            <p style={{ color: '#7A7A8C', fontSize: 14, fontStyle: 'italic', margin: '0 0 12px', lineHeight: 1.5 }}>Montants non précisés —<br/>les recommandations restent valides</p>
+            <p style={{ color: '#7A7A8C', fontSize: 14, fontStyle: 'italic', margin: '0 0 4px', lineHeight: 1.5 }}>Montants non précisés —<br/>les recommandations restent valides</p>
+          )}
+          {hasConjoint && isUserPov && (
+            <p style={{ color: '#A8A8B8', fontSize: 11, margin: '0 0 10px' }}>
+              {patView === 'seul' ? `Vos actifs en propre` : `${userProfile.prenom || 'Vous'} + ${userProfile.conjoint}`}
+            </p>
           )}
           <div style={{ borderTop: '1px solid #F5F0EA', paddingTop: 12 }}>
             <p style={{ color: '#7A7A8C', fontSize: 12, marginBottom: 4 }}>
-              {isFocusA ? 'Droits à régler — succession parentale' : 'Droit successoral estimé'}
+              {isFocusA ? 'Droits à régler — succession parentale' : isGPScenario ? 'Droits — GP vers parents' : 'Droit successoral estimé'}
             </p>
             {loading ? <Skeleton h={24} w="55%" /> : calculs.successionEstimee > 0 ? (
               <p style={{ color: '#C9A96E', fontWeight: 700, fontSize: 20, margin: 0 }}>{euro(calculs.successionEstimee)}</p>
@@ -281,6 +336,23 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
           {tab === 'succession' && (
             <div className="fade-in">
 
+              {/* ── Sélecteur de scénario — si plusieurs maillons disponibles ── */}
+              {availableSuccScenarios.length > 1 && (
+                <div style={{ marginBottom: 18 }}>
+                  <p style={{ color: '#7A7A8C', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+                    Scénario affiché
+                  </p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {availableSuccScenarios.map(s => (
+                      <button key={s.id} onClick={() => setSuccScenario(s.id)}
+                        style={{ padding: '7px 14px', border: `2px solid ${succScenario === s.id ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 20, background: succScenario === s.id ? '#F0F4FF' : 'white', color: succScenario === s.id ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: succScenario === s.id ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        {succScenario === s.id && '● '}{s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Bandeau contextuel Focus A */}
               {isFocusA && calculs.focusA && (
                 <div style={{ background: 'linear-gradient(135deg, #FFFDF9 0%, #FFF8EE 100%)', border: '1px solid #FDE8C8', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
@@ -304,10 +376,28 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
                 </div>
               )}
 
+              {/* Bandeau contextuel GP → parents */}
+              {isGPScenario && calculs.focusGP && (
+                <div style={{ background: 'linear-gradient(135deg, #FFFDF9 0%, #FFF8EE 100%)', border: '1px solid #FDE8C8', borderRadius: 10, padding: '12px 16px', marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+                  <span style={{ color: '#C9A96E', fontSize: 13, fontWeight: 600 }}>⚖ Succession de vos grands-parents → vos parents</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                    {[
+                      { label: 'Patrimoine grands-parents estimé', val: euro(calculs.focusGP.patrimoineGP) },
+                      { label: 'Part de chaque parent', val: `${euro(calculs.focusGP.partParParent)} (1/${calculs.focusGP.nbHeritiers})` },
+                      { label: 'Abattement ligne directe', val: `${euro(calculs.focusGP.abattement)}/parent` },
+                    ].map(({ label, val }) => (
+                      <span key={label} style={{ color: '#7A7A8C', fontSize: 12 }}>
+                        <span style={{ color: '#1B2B4B', fontWeight: 600 }}>{val}</span> {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 20 }}>
                 {[
                   {
-                    label: isFocusA ? 'Droits à régler — statu quo' : 'Droits estimés — statu quo',
+                    label: isFocusA ? 'Droits à régler — statu quo' : isGPScenario ? 'Droits parents — statu quo' : 'Droits estimés — statu quo',
                     val: calculs.droits.statusQuo,
                     bg: '#F9FAFB', color: '#1B2B4B',
                     sub: isFocusA ? 'Sans optimisation de la transmission parentale' : 'Situation actuelle sans action',

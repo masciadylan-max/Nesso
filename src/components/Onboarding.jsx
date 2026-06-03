@@ -231,7 +231,7 @@ const buildUserDataFromForm = (f) => {
     pea:        { categorie: 'financier',     type: 'PEA' },
     per:        { categorie: 'financier',     type: 'PER' },
     liquidites: { categorie: 'financier',     type: 'Liquidités' },
-    financier:  { categorie: 'financier',     type: 'Autre' },
+    financier:  { categorie: 'financier',     type: 'Autres placements' },
     entreprise: { categorie: 'professionnel', type: 'Société' },
     exotique:   { categorie: 'exotique',      type: 'Autre' },
     etranger:   { categorie: 'immobilier',    type: 'Bien étranger' },
