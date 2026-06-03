@@ -216,6 +216,190 @@ const extractUserData = async (history) => {
   }
 };
 
+// ─── TRANSFORMATION DIRECTE FORMULAIRE → PROFIL UTILISATEUR ─────────────────
+// Construit le userProfile + actifs directement depuis les champs du formulaire.
+// Pas d'appel Haiku, pas d'extraction de texte — données structurées → dashboard.
+const buildUserDataFromForm = (f) => {
+  const nbEnfants = f.enfants === '4+' ? 4 : parseInt(f.enfants) || 0;
+  const hasConjoint = f.situation_civile && f.situation_civile !== 'celibataire' && !!f.conjoint_prenom;
+
+  // Mappings clé formulaire → catégorie + type dashboard
+  const ASSET_MAP = {
+    rp:         { categorie: 'immobilier',    type: 'Résidence principale' },
+    locatif:    { categorie: 'immobilier',    type: 'Bien locatif' },
+    av:         { categorie: 'financier',     type: 'Assurance-vie' },
+    pea:        { categorie: 'financier',     type: 'PEA' },
+    per:        { categorie: 'financier',     type: 'PER' },
+    liquidites: { categorie: 'financier',     type: 'Liquidités' },
+    financier:  { categorie: 'financier',     type: 'Autre' },
+    entreprise: { categorie: 'professionnel', type: 'Société' },
+    exotique:   { categorie: 'exotique',      type: 'Autre' },
+    etranger:   { categorie: 'immobilier',    type: 'Bien étranger' },
+  };
+  const ASSET_LABELS = {
+    rp: 'Résidence principale', locatif: 'Immobilier locatif', av: 'Assurance-vie',
+    pea: 'PEA', per: 'PER', liquidites: 'Livrets / Liquidités', financier: 'Autres placements',
+    entreprise: 'Entreprise', exotique: 'Actif atypique', etranger: "Bien à l'étranger",
+  };
+  const ASSET_DEFAULTS = {
+    rp: 350000, locatif: 200000, av: 50000, pea: 30000, per: 20000,
+    liquidites: 15000, financier: 50000, entreprise: 200000, exotique: 10000, etranger: 200000,
+  };
+
+  // Propriété de l'actif : proprio form → proprietaires[]
+  const mapProprio = (proprio, key, situCivile) => {
+    if (proprio === 'user')     return ['user'];
+    if (proprio === 'conjoint') return ['conjoint'];
+    if (proprio === 'both')     return ['user', 'conjoint'];
+    // Défaut : RP en commun si marié/pacsé, sinon user seul
+    if (key === 'rp' && (situCivile === 'marie' || situCivile === 'pacse')) return ['user', 'conjoint'];
+    return ['user'];
+  };
+
+  // ── Construction des actifs ──
+  const actifs = [];
+  let assetId = 1000;
+  Object.entries(f.patrimoine_detail || {}).forEach(([key, items]) => {
+    (items || []).forEach((item, idx) => {
+      const valeur = parseInt(item?.valeur) || ASSET_DEFAULTS[key] || 50000;
+      const map    = ASSET_MAP[key] || { categorie: 'financier', type: 'Autre' };
+      const nom    = key === 'exotique' && item?.nom
+        ? item.nom
+        : (items.length > 1
+            ? `${ASSET_LABELS[key] || key} (${idx + 1})`
+            : (ASSET_LABELS[key] || key));
+      actifs.push({
+        id: assetId++,
+        nom,
+        categorie: map.categorie,
+        type: map.type,
+        valeur,
+        pays: key === 'etranger' ? 'Étranger' : 'France',
+        proprietaires: mapProprio(item?.proprio, key, f.situation_civile),
+        av_clause: map.type === 'Assurance-vie' ? 'inconnue' : undefined,
+        sci_immo_ratio: map.categorie === 'sci' ? 0.9 : undefined,
+        credit: false, note: null, beneficiaire: null,
+      });
+    });
+  });
+
+  // Filet de sécurité : au moins 2 actifs pour éviter un dashboard vide
+  if (actifs.length === 0) {
+    actifs.push(
+      { id: 1000, nom: 'Résidence principale (estimée)', categorie: 'immobilier', type: 'Résidence principale', valeur: 350000, pays: 'France', proprietaires: ['user'], credit: false, note: null, beneficiaire: null },
+      { id: 1001, nom: 'Épargne (estimée)', categorie: 'financier', type: 'Liquidités', valeur: 15000, pays: 'France', proprietaires: ['user'], credit: false, note: null, beneficiaire: null }
+    );
+  }
+
+  // ── Focus ──
+  const focusPrincipalMap = {
+    A: 'Transmission parentale',
+    B: hasConjoint ? 'Protection du partenaire' : 'Protection des proches & transmission',
+    C: 'Optimisation fiscale annuelle',
+  };
+  const focus_principal = focusPrincipalMap[f.focus] || 'Protection des proches & transmission';
+  const focus_audit = f.focus === 'C' ? 'optimisation' : f.focus === 'A' ? 'succession' : 'les_deux';
+
+  // ── Famille / grands-parents ──
+  const nbParentsEnVie  = { les_deux: 2, pere: 1, mere: 1, non: 0 }[f.parents_en_vie] ?? 1;
+  const gpMaterVivants  = !!f.gp_maternels && f.gp_maternels !== 'non';
+  const gpPatVivants    = !!f.gp_paternels && f.gp_paternels !== 'non';
+  const gpMaterAge = gpMaterVivants
+    ? (f.gp_maternels === 'les_deux' && f.gp_maternels_age && f.gp_maternels_age2
+        ? Math.round((parseInt(f.gp_maternels_age) + parseInt(f.gp_maternels_age2)) / 2)
+        : parseInt(f.gp_maternels_age) || null)
+    : null;
+  const gpPatAge = gpPatVivants
+    ? (f.gp_paternels === 'les_deux' && f.gp_paternels_age && f.gp_paternels_age2
+        ? Math.round((parseInt(f.gp_paternels_age) + parseInt(f.gp_paternels_age2)) / 2)
+        : parseInt(f.gp_paternels_age) || null)
+    : null;
+
+  // Fratrie
+  const nbFratrie = f.fratrie === '4+' ? 4 : parseInt(f.fratrie) || 0;
+  const fratrie = Array.from({ length: nbFratrie }, (_, i) => ({
+    prenom: `Frère/Sœur ${i + 1}`, lien: 'frère', handicap: false,
+  }));
+
+  // ── Revenus ──
+  const revU = parseInt(f.revenus_user)     || 0;
+  const revC = parseInt(f.revenus_conjoint) || 0;
+  const revenus_annuels_foyer = (revU + revC) || parseInt(f.revenus_foyer) || 0;
+
+  // ── Alertes automatiques ──
+  const alertes = [];
+  if (f.situation_civile === 'pacse' && f.testament !== 'oui') alertes.push('pacs_sans_testament');
+  if (f.situation_civile === 'concubin') alertes.push('concubinage');
+  if ((f.patrimoine_detail?.etranger || []).length > 0) alertes.push('international');
+  if (f.famille_recomposee) alertes.push('famille_recomposee');
+  if (['dirigeant', 'tns'].includes(f.statut_pro)) alertes.push('dutreil');
+  if (f.profession === 'libéral') alertes.push('carmf');
+  const immoNet = actifs
+    .filter(a => a.categorie === 'immobilier')
+    .reduce((s, a) => s + a.valeur * (a.type === 'Résidence principale' ? 0.7 : 1), 0);
+  if (immoNet > 1300000) alertes.push('ifi');
+
+  // ── Prénoms enfants ──
+  const enfants_prenoms = Array.from({ length: nbEnfants }, (_, i) =>
+    f.enfants_data?.[i]?.prenom || `Enfant ${i + 1}`
+  );
+
+  return {
+    prenom: f.prenom || 'Vous',
+    conjoint: hasConjoint ? f.conjoint_prenom : null,
+    enfants_prenoms,
+    enfants: nbEnfants,
+    age: parseInt(f.age) || 45,
+    profession: f.profession || 'Cadre',
+    regime: f.regime || (f.situation_civile === 'marie' ? 'communaute' : null),
+    situation_civile: f.situation_civile || 'celibataire',
+    parents_en_vie: f.parents_en_vie !== 'non' && !!f.parents_en_vie,
+    famille_recomposee: !!f.famille_recomposee,
+    focus_principal,
+    focus_audit,
+    famille: {
+      mere_prenom: null,
+      pere_prenom: null,
+      parents_en_vie: f.parents_en_vie !== 'non' && !!f.parents_en_vie,
+      nb_parents_en_vie: nbParentsEnVie,
+      pere_age: f.parents_en_vie !== 'mere' ? parseInt(f.pere_age) || null : null,
+      mere_age: f.parents_en_vie !== 'pere' ? parseInt(f.mere_age) || null : null,
+      gp_maternels_vivants: gpMaterVivants,
+      gp_maternels_age: gpMaterAge,
+      gp_paternels_vivants: gpPatVivants,
+      gp_paternels_age: gpPatAge,
+      fratrie,
+      autres: [],
+      patrimoine_parents_estime: parseInt(f.parents_patrimoine) || 0,
+      patrimoine_gp_estime: parseInt(f.gp_patrimoine) || 0,
+      gp_transmission_organisee: f.parents_orga === 'oui',
+      gp_leviers_identifies: [],
+    },
+    succession: {
+      grands_parents_vivants: gpMaterVivants || gpPatVivants,
+      grands_parents_patrimoine_estime: parseInt(f.gp_patrimoine) || 0,
+      autres_parties_prenantes: [],
+      belle_famille_incluse: false,
+      belle_famille_patrimoine_estime: 0,
+      donations_passees: [],
+      testament_existant: f.testament === 'oui',
+    },
+    optimisation: {
+      revenus_annuels_foyer,
+      tmi: null,
+      charges_deductibles: [],
+      dispositifs_en_place: [],
+      regime_renumeration_dirigeant: ['dirigeant', 'tns'].includes(f.statut_pro) ? 'mixte' : 'na',
+      quotient_familial_situations: [],
+    },
+    actifs,
+    alertes,
+    score: 60,
+    objectifs: 'Optimiser la transmission patrimoniale et réduire la fiscalité',
+  };
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Rendu markdown minimal : **gras** → <strong>
 const renderText = (text) => {
   const parts = text.split(/(\*\*[^*\n]+\*\*)/g);
@@ -236,7 +420,9 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
   const [loading, setLoading]       = useState(false);
   const [updating, setUpdating]     = useState(false);
   const [msgCount, setMsgCount]     = useState(0);
-  const endRef = useRef(null);
+  const endRef          = useRef(null);
+  // Données formulaire transformées directement → source de vérité pour le dashboard
+  const formUserDataRef = useRef(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
@@ -419,9 +605,15 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
   const complete = (updatedHistory) => {
     setTimeout(async () => {
-      const userData = await extractUserData(updatedHistory);
       logAuditTotal();
-      onComplete(sanitizeUserData(userData));
+      if (formUserDataRef.current) {
+        // Données formulaire disponibles → source de vérité directe, pas de Haiku
+        onComplete(formUserDataRef.current);
+      } else {
+        // Fallback : mode chat sans formulaire → extraction Haiku classique
+        const userData = await extractUserData(updatedHistory);
+        onComplete(sanitizeUserData(userData));
+      }
     }, 1200);
   };
 
@@ -449,8 +641,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
   // Démarre le chat après remplissage du formulaire
   // Le message de contexte est injecté en "hidden" : présent dans l'historique API mais pas affiché dans l'UI
+  // Les données du formulaire sont transformées directement → formUserDataRef (pas de Haiku pour le dashboard)
   const startWithForm = async (f) => {
     resetAuditCost();
+    // Transformer les données formulaire en profil dashboard immédiatement
+    formUserDataRef.current = buildUserDataFromForm(f);
     const contextMsg = buildContextMessage(f);
     const hiddenMsg  = { role: 'user', content: contextMsg, hidden: true };
     setAuditPhase('chat');
@@ -497,9 +692,15 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
   const handleMettreAJour = async () => {
     if (updating || loading) return;
     setUpdating(true);
-    const userData = await extractUserData(messages);
     logAuditTotal();
-    onComplete(sanitizeUserData(userData));
+    if (formUserDataRef.current) {
+      // Données formulaire disponibles → source de vérité directe, pas de Haiku
+      onComplete(formUserDataRef.current);
+    } else {
+      // Fallback : mode chat sans formulaire → extraction Haiku classique
+      const userData = await extractUserData(messages);
+      onComplete(sanitizeUserData(userData));
+    }
     setUpdating(false);
   };
 
