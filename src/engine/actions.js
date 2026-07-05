@@ -2,7 +2,7 @@
 // Génère max 3 actions triées par urgence selon le profil utilisateur.
 
 import { euro } from '../utils.js';
-import { calcBaseIFI, calcTauxNuePropriete, calcDroitsBareme } from './calculs.js';
+import { calcBaseIFI, calcTauxNuePropriete, calcDroitsBareme, computeFocusACalculs } from './calculs.js';
 
 // ── Actions prioritaires — orientées par focus et alertes réelles ────────────
 export const generateUserActions = (userProfile, patrimoine) => {
@@ -50,11 +50,16 @@ export const generateUserActions = (userProfile, patrimoine) => {
     // Saut de génération si GP vivants avec patrimoine significatif
     if (gpVivants && patrimoineGP > 100000) {
       const nbPetitsEnfants = 1 + fratrie.length;
+      // Économie = droits que les parents auraient payés sur l'héritage GP (double imposition)
+      //            moins droits de l'user en recevant directement des GP (abattement 31 786€/PE)
+      const droitsSansSaut = calcDroitsBareme(Math.max(0, Math.round(patrimoineGP / 2) - 100000)) * 2;
+      const droitsAvecSaut = calcDroitsBareme(Math.max(0, Math.round(patrimoineGP / nbPetitsEnfants) - 31786));
+      const economieSaut   = Math.max(0, droitsSansSaut - droitsAvecSaut);
       actions.push({
         urgence: 'orange', titreGenerique: 'Saut de génération',
         titre: 'Étudier le saut de génération avec vos grands-parents',
         description: `Vos grands-parents ont un patrimoine estimé à ${euro(patrimoineGP)}. Si ce patrimoine transite GP → parents → vous, il sera taxé deux fois. Une donation directe GP → petits-enfants (abattement propre de 31 786€/petit-enfant, tous les 15 ans) évite cette double imposition sur un même actif.`,
-        economieLabel: 'Évite la double imposition sur la même valeur', economie: 0, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois',
+        economieLabel: 'Évite la double imposition sur la même valeur', economie: economieSaut, coutLabel: '~300€ (notaire)', cout: 300, delai: '< 6 mois',
         etapes: [
           `Calculer les droits avec double transmission (GP→parent : ${nbPetitsEnfants > 1 ? `abattement partagé entre ${nbPetitsEnfants} petits-enfants` : 'abattement 31 786€'}) vs donation directe`,
           "Identifier le bien le plus adapté au saut de génération (hors bien avec affect fort pour les parents)",
@@ -66,11 +71,12 @@ export const generateUserActions = (userProfile, patrimoine) => {
     }
     // Anticiper la transmission des parents si patrimoine significatif et non organisé
     if (parentsEnVie && patrimoineParents > 150000) {
+      const focusA = computeFocusACalculs(userProfile);
       actions.push({
         urgence: 'orange', titreGenerique: 'Transmission parentale',
         titre: 'Anticiper la transmission du patrimoine de vos parents',
         description: `Le patrimoine de vos parents (estimé à ${euro(patrimoineParents)}) peut être optimisé dès maintenant. Chaque parent peut donner 100 000€ par enfant tous les 15 ans, sans droits. Une donation organisée avec un notaire, faite aujourd'hui, réduit la base taxable future — et gèle les valeurs si c'est une donation-partage.`,
-        economieLabel: "Jusqu'à 100 000€ par parent, par enfant exonérés", economie: 0, coutLabel: '~400–800€ (notaire)', cout: 600, delai: '< 12 mois',
+        economieLabel: "Jusqu'à 100 000€ par parent, par enfant exonérés", economie: focusA.economieSuccession, coutLabel: '~400–800€ (notaire)', cout: 600, delai: '< 12 mois',
         etapes: [
           "Inventorier les actifs transmissibles des parents (immo, AV, financier)",
           "Vérifier le rappel fiscal : donations < 15 ans à déduire de l'abattement",

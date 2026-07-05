@@ -143,31 +143,53 @@ export default function Dashboard({ pov, actifs, userProfile, onRefairAudit }) {
     && (userProfile?.famille?.patrimoine_gp_estime || 0) > 0
     && (userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants);
   const availableSuccScenarios = [
-    { id: 'ma_succession',        label: 'Ma succession' },
-    ...(canShowParentsScenario  ? [{ id: 'je_recois_parents',      label: 'Je reçois de mes parents' }] : []),
-    ...(canShowGPScenario       ? [{ id: 'parents_recoivent_gp',   label: 'Mes parents reçoivent des GP' }] : []),
+    { id: 'ma_succession',        label: 'Votre succession' },
+    ...(canShowParentsScenario  ? [{ id: 'je_recois_parents',      label: 'Succession de vos parents' }] : []),
+    ...(canShowGPScenario       ? [{ id: 'parents_recoivent_gp',   label: 'Succession de vos grands-parents' }] : []),
   ];
 
   // isFocusA est maintenant piloté par le scénario sélectionné (pas seulement par le focus de l'audit)
   const isFocusA = succScenario === 'je_recois_parents';
   const isGPScenario = succScenario === 'parents_recoivent_gp';
 
-  const calculs = isUserPov
-    ? isFocusA
-      ? computeFocusACalculs(userProfileForPov)
-      : isGPScenario
-        ? (computeGPToParentsCalculs(userProfile) || computeUserCalculs(patrimoine, userProfileForPov))
-        : computeUserCalculs(patrimoine, userProfileForPov)
-    : (CALCULS[pov] || CALCULS.lucas);
-  const actions = isUserPov ? generateUserActions(userProfileForPov, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
+  let calculs;
+  try {
+    calculs = isUserPov
+      ? isFocusA
+        ? computeFocusACalculs(userProfileForPov)
+        : isGPScenario
+          ? (computeGPToParentsCalculs(userProfile) || computeUserCalculs(patrimoine, userProfileForPov))
+          : computeUserCalculs(patrimoine, userProfileForPov)
+      : (CALCULS[pov] || CALCULS.lucas);
+  } catch (e) {
+    console.error('[Nesso] Erreur calculs (scénario:', succScenario, '):', e);
+    calculs = null;
+  }
+  // Sécurité : si calculs est null (erreur ou cas non couvert), fallback sur CALCULS.lucas
+  if (!calculs) calculs = CALCULS.lucas;
+
+  let actions;
+  try {
+    actions = isUserPov ? generateUserActions(userProfileForPov, patrimoine) : (ACTIONS[pov] || ACTIONS.lucas);
+  } catch (e) {
+    console.error('[Nesso] Erreur actions:', e);
+    actions = ACTIONS.lucas || [];
+  }
+  if (!actions) actions = [];
 
   // Total toutes économies identifiées (succession + actions chiffrées)
   const totalEconomiesActions = actions.reduce((sum, a) => sum + (a.economie > 0 ? a.economie : 0), 0);
   const totalEconomies = Math.max(calculs.economieSuccession, totalEconomiesActions);
 
   // Scénarios comparatifs + calendrier (uniquement POV user, si données suffisantes)
-  const scenarios  = isUserPov ? generateScenarios(userProfileForPov, patrimoine, isFocusA) : null;
-  const timeline   = isUserPov ? generateTimeline(userProfileForPov) : [];
+  let scenarios = null;
+  let timeline = [];
+  try {
+    scenarios = isUserPov ? generateScenarios(userProfileForPov, patrimoine, isFocusA) : null;
+    timeline  = isUserPov ? generateTimeline(userProfileForPov) : [];
+  } catch (e) {
+    console.error('[Nesso] Erreur scenarios/timeline:', e);
+  }
 
   // Freemium — hardcodé false en V1 (TODO : connecter à l'état d'abonnement Supabase)
   const isNessoPlus = false;
