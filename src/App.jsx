@@ -31,9 +31,9 @@ const saveToSupabase = async (userId, { userProfile, actifs, pov }) => {
 // Bannière "Sauvegardez votre audit" pour les utilisateurs non connectés
 function SaveBanner({ onSave }) {
   return (
-    <div style={{ background: 'linear-gradient(135deg, #1B2B4B 0%, #243656 100%)', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
+    <div style={{ background: 'linear-gradient(135deg, #1A201C 0%, #253029 100%)', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap' }}>
       <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, margin: 0 }}>
-        ✦ <strong style={{ color: '#C9A96E' }}>Votre analyse n'est pas sauvegardée</strong> — créez un compte gratuit pour y accéder depuis n'importe quel appareil.
+        ✦ <strong style={{ color: '#1F6B4A' }}>Votre analyse n'est pas sauvegardée</strong> — créez un compte gratuit pour y accéder depuis n'importe quel appareil.
       </p>
       <button onClick={onSave} className="btn-gold" style={{ fontSize: 13, padding: '7px 18px', whiteSpace: 'nowrap' }}>
         Sauvegarder mon audit →
@@ -54,17 +54,17 @@ function OnboardingUserBadge({ email, onLogout, onRetour }) {
   return (
     <div ref={ref} style={{ position: 'fixed', top: 16, right: 16, zIndex: 150 }}>
       <button onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1B2B4B', color: 'white', padding: '6px 12px 6px 6px', borderRadius: 24, border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', fontFamily: 'DM Sans, sans-serif' }}>
-        <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#C9A96E', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1A201C', color: 'white', padding: '6px 12px 6px 6px', borderRadius: 24, border: 'none', cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.15)', fontFamily: 'DM Sans, sans-serif' }}>
+        <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#1F6B4A', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           {email[0].toUpperCase()}
         </span>
         <span style={{ fontSize: 12, opacity: 0.85, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
         <span style={{ fontSize: 9, opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'white', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1px solid #E5E7EB', minWidth: 180, overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: 'white', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', border: '1px solid #DDD8C9', minWidth: 180, overflow: 'hidden' }}>
           <button onClick={() => { setOpen(false); onLogout(); }}
-            style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, color: '#E24B4A', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
+            style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', textAlign: 'left', fontSize: 14, color: '#C2502F', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', display: 'flex', alignItems: 'center', gap: 10 }}>
             → Se déconnecter
           </button>
         </div>
@@ -309,7 +309,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F0EA' }}>
+    <div style={{ minHeight: '100vh', background: '#F6F4ED' }}>
       <Navbar
         view={view} setView={_setView}
         pov={pov} setPov={setPov}
@@ -322,10 +322,10 @@ export default function App() {
 
       {/* Bug #6 : message d'erreur si la migration localStorage → Supabase a échoué */}
       {migrationError && (
-        <div style={{ background: '#FEF2F2', borderBottom: '1px solid #FECACA', padding: '12px 24px', textAlign: 'center' }}>
-          <p style={{ color: '#991B1B', fontSize: 13, margin: 0 }}>
+        <div style={{ background: '#FAEDE7', borderBottom: '1px solid #EFCDBE', padding: '12px 24px', textAlign: 'center' }}>
+          <p style={{ color: '#8C3A20', fontSize: 13, margin: 0 }}>
             ⚠ {migrationError}{' '}
-            <button onClick={() => setMigrationError(null)} style={{ background: 'none', border: 'none', color: '#991B1B', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>Fermer</button>
+            <button onClick={() => setMigrationError(null)} style={{ background: 'none', border: 'none', color: '#8C3A20', textDecoration: 'underline', cursor: 'pointer', fontSize: 13 }}>Fermer</button>
           </p>
         </div>
       )}
@@ -346,12 +346,12 @@ export default function App() {
         {view === 'confidentialite' && <Confidentialite />}
       </main>
 
-      <footer style={{ textAlign: 'center', padding: '16px 24px 80px', borderTop: '1px solid rgba(27,43,75,0.08)' }}>
-        <button onClick={() => setView('confidentialite')} style={{ background: 'none', border: 'none', color: '#7A7A8C', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textDecoration: 'underline' }}>
+      <footer style={{ textAlign: 'center', padding: '16px 24px 80px', borderTop: '1px solid rgba(26,32,28,0.08)' }}>
+        <button onClick={() => setView('confidentialite')} style={{ background: 'none', border: 'none', color: '#5C635E', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', textDecoration: 'underline' }}>
           Politique de confidentialité
         </button>
-        <span style={{ color: '#D1C4B0', margin: '0 10px' }}>·</span>
-        <span style={{ color: '#7A7A8C', fontSize: 12 }}>© 2026 Nesso — Estimations à titre indicatif</span>
+        <span style={{ color: '#A8B5AA', margin: '0 10px' }}>·</span>
+        <span style={{ color: '#5C635E', fontSize: 12 }}>© 2026 Nesso — Estimations à titre indicatif</span>
       </footer>
 
       {/* Modal Auth (sauvegarde post-audit) */}

@@ -1,13 +1,9 @@
-import { FAMILLE, ACTIFS, DEMO_SCRIPT } from './data.js';
+import { FAMILLE, ACTIFS } from './data.js';
 
 export const euro = (n) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n || 0);
 
 export const getPersonne = (id) => FAMILLE.find(p => p.id === id);
-
-// POV réels de l'user (vs POV démo de la FAMILLE hardcodée)
-const USER_POVS = new Set(['user', 'conjoint', 'foyer']);
-const isUserPov = (id) => USER_POVS.has(id) || id?.startsWith?.('enfant_');
 
 // Filtre les actifs selon le point de vue :
 //   'foyer'     → tous les actifs du ménage
@@ -61,25 +57,4 @@ export const getAlerts = (id) => {
     alerts.push('Fiscalité internationale');
   if (p.handicap) alerts.push('Abattement handicap 159 325€ applicable');
   return alerts;
-};
-
-// Retourne une réponse scriptée selon le message utilisateur
-export const getDemoResponse = (message, messageCount) => {
-  const lower = message.toLowerCase();
-
-  // Dernier message → rediriger vers le dashboard
-  if (messageCount >= 7) {
-    return DEMO_SCRIPT.find(s => s.trigger === 'default').response.replace(
-      'Pour commencer',
-      '✦ Votre profil est prêt. Cliquez sur "Voir mon tableau de bord" pour découvrir vos recommandations.\n\nPour finir'
-    );
-  }
-
-  for (const script of DEMO_SCRIPT) {
-    if (script.trigger === 'default') continue;
-    if (script.trigger.some(t => lower.includes(t))) return script.response;
-  }
-
-  // Réponse générique si rien ne correspond
-  return `Je comprends. Pour affiner votre profil : avez-vous des biens immobiliers, en France ou à l'étranger ?`;
 };

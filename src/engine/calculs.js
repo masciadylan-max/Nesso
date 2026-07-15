@@ -3,6 +3,10 @@
 // Références légales : art. 777 CGI (succession), art. 977 CGI (IFI),
 //                      art. 965 CGI (parts SCI), art. 669 CGI (nue-propriété).
 
+// Garde-fou : l'extraction Haiku (ou un vieux profil Supabase) peut renvoyer un
+// champ liste sous forme de texte — on n'itère jamais sur autre chose qu'un tableau.
+export const asArray = (x) => (Array.isArray(x) ? x : []);
+
 // ── Barème progressif succession ligne directe (art. 777 CGI) ──────────────
 export const calcDroitsBareme = (taxable) => {
   if (taxable <= 0) return 0;
@@ -87,7 +91,7 @@ export const calcTauxNuePropriete = (ageUsufruitier) => {
 // ── Score de risque successoral — calculé sur les vrais signaux ─────────────
 export const computeScore = (userProfile, { patrimoine = 0, droitsStatusQuo = 0 } = {}) => {
   let score = 15; // baseline : toute situation non suivie comporte un risque résiduel
-  const alertes    = (userProfile?.alertes || []).map(a => a.toLowerCase());
+  const alertes    = asArray(userProfile?.alertes).map(a => String(a).toLowerCase());
   const situation  = userProfile?.situation_civile || '';
   const regime     = userProfile?.regime || '';
   const testamentExistant = userProfile?.succession?.testament_existant;
@@ -95,8 +99,8 @@ export const computeScore = (userProfile, { patrimoine = 0, droitsStatusQuo = 0 
   const userAge    = userProfile?.age || 45;
   const tmiNum     = parseInt(userProfile?.optimisation?.tmi) || 0;
   const revenus    = userProfile?.optimisation?.revenus_annuels_foyer || 0;
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert  = dispositifs.some(d => d.toLowerCase().includes('per'));
+  const dispositifs = asArray(userProfile?.optimisation?.dispositifs_en_place);
+  const perOuvert  = dispositifs.some(d => typeof d === 'string' && d.toLowerCase().includes('per'));
   const nbEnfants  = userProfile?.enfants || 0;
 
   // Risques critiques
@@ -171,7 +175,7 @@ export const computeUserCalculs = (patrimoine, userProfile) => {
       droitsStatusQuo     = calcDroitsBareme(Math.max(0, partParParent - 100000)) * 2;
     } else {
       // Fratrie : abattement 15 932€, taux 35-45%
-      const fratrie       = Math.max(1, (userProfile?.famille?.fratrie || []).length);
+      const fratrie       = Math.max(1, asArray(userProfile?.famille?.fratrie).length);
       const partFratrie   = Math.round(baseSuccession / fratrie);
       const taxFratrie    = Math.max(0, partFratrie - 15932);
       const droitFratrie  = taxFratrie <= 24430
@@ -224,8 +228,8 @@ export const computeUserCalculs = (patrimoine, userProfile) => {
   const totalImpots = ir + ifi + ps;
 
   // Économie PER — plafond réel 2024 : 10% du revenu, min 4 114€, max 35 194€
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert   = dispositifs.some(d => d.toLowerCase().includes('per'));
+  const dispositifs = asArray(userProfile?.optimisation?.dispositifs_en_place);
+  const perOuvert   = dispositifs.some(d => typeof d === 'string' && d.toLowerCase().includes('per'));
   const plafondPER  = revenus > 0 ? Math.min(Math.max(revenus * 0.10, 4114), 35194) : 0;
   const economiePER = (!perOuvert && tmiNum >= 30 && revenus > 0)
     ? Math.round(plafondPER * (tmiNum / 100))

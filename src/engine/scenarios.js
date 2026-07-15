@@ -2,13 +2,13 @@
 // Génère les scénarios comparatifs et le calendrier fiscal time-sensitive.
 
 import { euro } from '../utils.js';
-import { calcDroitsBareme, calcBaseSuccession, calcTauxNuePropriete } from './calculs.js';
+import { calcDroitsBareme, calcBaseSuccession, calcTauxNuePropriete, asArray } from './calculs.js';
 
 // ── Scénarios comparatifs ────────────────────────────────────────────────────
 // 3 scénarios nommés avec calculs réels : statu quo, AV seule, AV + don familial
 export const generateScenarios = (userProfile, patrimoine, isFocusA) => {
   const nbEnfants      = userProfile?.enfants || 0;
-  const fratrie        = userProfile?.famille?.fratrie || [];
+  const fratrie        = asArray(userProfile?.famille?.fratrie);
   const nbHeritiers    = Math.max(1, fratrie.length + 1); // user + fratrie
   // BUG FIX : nb_parents_en_vie = 0 → abattement 0 (Math.max(1, 0) était incorrect)
   const nbParentsEnVie = userProfile?.famille?.nb_parents_en_vie ?? 1;
@@ -20,8 +20,8 @@ export const generateScenarios = (userProfile, patrimoine, isFocusA) => {
 
     // ── Abattement résiduel : déduire les donations récentes (< 15 ans) ───────
     // "de": "parent", "vers": "user", montant connu → consomme l'abattement
-    const donationsParentsVersUser = (userProfile?.succession?.donations_passees || [])
-      .filter(d => d.de === 'parent' && d.vers === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
+    const donationsParentsVersUser = asArray(userProfile?.succession?.donations_passees)
+      .filter(d => d && d.de === 'parent' && d.vers === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
     const montantConsomme  = donationsParentsVersUser.reduce((s, d) => s + (d.montant || 0), 0);
     const abattementBrut   = nbParentsEnVie > 0 ? 100000 * nbParentsEnVie : 0;
     const abattement       = Math.max(0, abattementBrut - montantConsomme);
@@ -100,8 +100,8 @@ export const generateScenarios = (userProfile, patrimoine, isFocusA) => {
     if (baseSuccession === 0 || nbEnfants === 0) return null;
 
     // ── Abattement résiduel — donations de l'user vers ses enfants < 15 ans ──
-    const donationsUserVersEnfants = (userProfile?.succession?.donations_passees || [])
-      .filter(d => d.de === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
+    const donationsUserVersEnfants = asArray(userProfile?.succession?.donations_passees)
+      .filter(d => d && d.de === 'user' && d.annee && (now - d.annee) < 15 && d.montant > 0);
     const montantConsomme  = donationsUserVersEnfants.reduce((s, d) => s + (d.montant || 0), 0) / Math.max(nbEnfants, 1);
     const abattementResiduel = Math.max(0, 100000 - montantConsomme);
     const abattementReduit = montantConsomme > 0;
@@ -170,10 +170,10 @@ export const generateTimeline = (userProfile) => {
   const gpPaternelsAge  = userProfile?.famille?.gp_paternels_age || null;
   const tmiNum   = parseInt(userProfile?.optimisation?.tmi) || 0;
   const revenus  = userProfile?.optimisation?.revenus_annuels_foyer || 0;
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert   = dispositifs.some(d => d.toLowerCase().includes('per'));
+  const dispositifs = asArray(userProfile?.optimisation?.dispositifs_en_place);
+  const perOuvert   = dispositifs.some(d => typeof d === 'string' && d.toLowerCase().includes('per'));
   const hasAV       = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
-  const donationsPassees = userProfile?.succession?.donations_passees || [];
+  const donationsPassees = asArray(userProfile?.succession?.donations_passees);
 
   // 1. AV de l'utilisateur — alimenter avant 70 ans
   const anneeAV70User = now + Math.max(0, 70 - userAge);

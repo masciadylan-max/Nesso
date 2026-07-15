@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { SYSTEM_PROMPT } from '../prompts/system.js';
 import { EXTRACTION_PROMPT } from '../prompts/extraction.js';
+import { ChouetteTete, ChouetteEclat } from './Chouette.jsx';
 
 // ─── FORMULAIRE DE CADRAGE ───────────────────────────────────────────────────
 const FORM_INIT = {
@@ -156,7 +157,7 @@ const logAuditTotal = () => {
     `  Cache write : ${auditCost.cacheWrite} tokens\n` +
     `  Output : ${auditCost.output} tokens\n` +
     `  Coût : $${auditCost.usd.toFixed(4)} ≈ ${centimesEur.toFixed(2)} centimes €`,
-    'color:#C9A96E;font-weight:bold;'
+    'color:#1F6B4A;font-weight:bold;'
   );
 };
 
@@ -304,16 +305,23 @@ const buildUserDataFromForm = (f) => {
   const nbParentsEnVie  = { les_deux: 2, pere: 1, mere: 1, non: 0 }[f.parents_en_vie] ?? 1;
   const gpMaterVivants  = !!f.gp_maternels && f.gp_maternels !== 'non';
   const gpPatVivants    = !!f.gp_paternels && f.gp_paternels !== 'non';
-  const gpMaterAge = gpMaterVivants
-    ? (f.gp_maternels === 'les_deux' && f.gp_maternels_age && f.gp_maternels_age2
-        ? Math.round((parseInt(f.gp_maternels_age) + parseInt(f.gp_maternels_age2)) / 2)
-        : parseInt(f.gp_maternels_age) || null)
-    : null;
-  const gpPatAge = gpPatVivants
-    ? (f.gp_paternels === 'les_deux' && f.gp_paternels_age && f.gp_paternels_age2
-        ? Math.round((parseInt(f.gp_paternels_age) + parseInt(f.gp_paternels_age2)) / 2)
-        : parseInt(f.gp_paternels_age) || null)
-    : null;
+  // Validation des âges : une saisie incohérente est écartée (null) plutôt que
+  // de fausser les deadlines fiscales (AV avant 70 ans, don familial avant 80 ans).
+  const ageUserSaisi = parseInt(f.age) || null;
+  const valideAge = (val, minAbs, maxAbs, ecartMin) => {
+    const n = parseInt(val);
+    if (!n || n < minAbs || n > maxAbs) return null;
+    if (ageUserSaisi && n < ageUserSaisi + ecartMin) return null;
+    return n;
+  };
+  // GP : bornes 50-120 ans, au moins 28 ans d'écart avec l'utilisateur
+  const moyenneAgesGP = (a1, a2) => {
+    const v1 = valideAge(a1, 50, 120, 28);
+    const v2 = valideAge(a2, 50, 120, 28);
+    return v1 && v2 ? Math.round((v1 + v2) / 2) : (v1 || v2 || null);
+  };
+  const gpMaterAge = gpMaterVivants ? moyenneAgesGP(f.gp_maternels_age, f.gp_maternels_age2) : null;
+  const gpPatAge   = gpPatVivants   ? moyenneAgesGP(f.gp_paternels_age, f.gp_paternels_age2) : null;
 
   // Fratrie
   const nbFratrie = f.fratrie === '4+' ? 4 : parseInt(f.fratrie) || 0;
@@ -322,9 +330,32 @@ const buildUserDataFromForm = (f) => {
   }));
 
   // ── Revenus ──
-  const revU = parseInt(f.revenus_user)     || 0;
-  const revC = parseInt(f.revenus_conjoint) || 0;
-  const revenus_annuels_foyer = (revU + revC) || parseInt(f.revenus_foyer) || 0;
+  // Brut → net : approximation salariale française (~22% de charges salariales)
+  const brutToNet = (v) => f.revenus_brut_net === 'brut' ? Math.round(v * 0.78) : v;
+  const revU = brutToNet(parseInt(f.revenus_user)     || 0);
+  const revC = brutToNet(parseInt(f.revenus_conjoint) || 0);
+  const revenus_annuels_foyer = (revU + revC) || brutToNet(parseInt(f.revenus_foyer) || 0);
+
+  // ── TMI dérivée — barème IR 2024 avec quotient familial ──
+  // Marié/pacsé : imposition commune (2 parts). Concubin/célibataire : imposition
+  // séparée — la TMI se calcule sur les seuls revenus de l'utilisateur (1 part).
+  // Enfants : +0,5 part chacun (1er et 2e), +1 part au-delà.
+  const partsFiscales = (['marie', 'pacse'].includes(f.situation_civile) ? 2 : 1)
+    + Math.min(nbEnfants, 2) * 0.5 + Math.max(0, nbEnfants - 2);
+  const baseTmi = ['marie', 'pacse'].includes(f.situation_civile)
+    ? revenus_annuels_foyer
+    : (revU || revenus_annuels_foyer);
+  let tmi = null;
+  if (baseTmi > 0) {
+    const qf = (baseTmi * 0.9) / partsFiscales; // abattement forfaitaire de 10%
+    tmi = qf <= 11294 ? '0' : qf <= 28797 ? '11' : qf <= 82341 ? '30' : qf <= 177106 ? '41' : '45';
+  }
+
+  // ── Dispositifs déjà en place — PER/PEA déclarés (focus C) ou saisis comme actifs ──
+  const dispositifs_en_place = [...new Set([
+    ...(f.per_ouvert === 'oui' || (f.patrimoine_detail?.per || []).length > 0 ? ['PER'] : []),
+    ...(f.pea_ouvert === 'oui' || (f.patrimoine_detail?.pea || []).length > 0 ? ['PEA'] : []),
+  ])];
 
   // ── Alertes automatiques ──
   const alertes = [];
@@ -362,8 +393,8 @@ const buildUserDataFromForm = (f) => {
       pere_prenom: null,
       parents_en_vie: f.parents_en_vie !== 'non' && !!f.parents_en_vie,
       nb_parents_en_vie: nbParentsEnVie,
-      pere_age: f.parents_en_vie !== 'mere' ? parseInt(f.pere_age) || null : null,
-      mere_age: f.parents_en_vie !== 'pere' ? parseInt(f.mere_age) || null : null,
+      pere_age: f.parents_en_vie !== 'mere' ? valideAge(f.pere_age, 30, 110, 14) : null,
+      mere_age: f.parents_en_vie !== 'pere' ? valideAge(f.mere_age, 30, 110, 14) : null,
       gp_maternels_vivants: gpMaterVivants,
       gp_maternels_age: gpMaterAge,
       gp_paternels_vivants: gpPatVivants,
@@ -371,7 +402,9 @@ const buildUserDataFromForm = (f) => {
       fratrie,
       autres: [],
       patrimoine_parents_estime: parseInt(f.parents_patrimoine) || 0,
+      patrimoine_parents_compo: f.parents_compo || [],
       patrimoine_gp_estime: parseInt(f.gp_patrimoine) || 0,
+      patrimoine_gp_compo: f.gp_compo || [],
       gp_transmission_organisee: f.parents_orga === 'oui',
       gp_leviers_identifies: [],
     },
@@ -386,9 +419,9 @@ const buildUserDataFromForm = (f) => {
     },
     optimisation: {
       revenus_annuels_foyer,
-      tmi: null,
+      tmi,
       charges_deductibles: [],
-      dispositifs_en_place: [],
+      dispositifs_en_place,
       regime_renumeration_dirigeant: ['dirigeant', 'tns'].includes(f.statut_pro) ? 'mixte' : 'na',
       quotient_familial_situations: [],
     },
@@ -399,6 +432,34 @@ const buildUserDataFromForm = (f) => {
   };
 };
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Compteur animé du manifeste — compte jusqu'à la cible quand il entre à l'écran
+function CompteurConstat({ cible, prefixe = '', suffixe = '', style }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      el.textContent = `${prefixe}${cible}${suffixe}`;
+      return;
+    }
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return;
+      io.disconnect();
+      const t0 = performance.now(), duree = 1300;
+      const pas = (t) => {
+        const p = Math.min(1, (t - t0) / duree);
+        const ease = 1 - Math.pow(1 - p, 3);
+        el.textContent = `${prefixe}${Math.round(cible * ease)}${suffixe}`;
+        if (p < 1) requestAnimationFrame(pas);
+      };
+      requestAnimationFrame(pas);
+    }, { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [cible, prefixe, suffixe]);
+  return <p ref={ref} className="font-serif" style={style}>{prefixe}0{suffixe}</p>;
+}
 
 // Rendu markdown minimal : **gras** → <strong>
 const renderText = (text) => {
@@ -426,6 +487,23 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
+  // Révélations au scroll — landing uniquement, coupées si l'utilisateur réduit les animations
+  useEffect(() => {
+    if (auditPhase !== 'landing') return;
+    const cibles = document.querySelectorAll('.reveal');
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      cibles.forEach(el => el.classList.add('vu'));
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('vu'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.15 });
+    cibles.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, [auditPhase]);
+
   const callApi = async (history) => {
     const res = await fetch('/anthropic/v1/messages', {
       method: 'POST',
@@ -443,7 +521,9 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
     }
     const data = await res.json();
     trackCost(data.usage, 'chat');
-    return data.content[0].text;
+    const text = data.content?.[0]?.text;
+    if (!text) throw new Error('Réponse vide du modèle');
+    return text;
   };
 
   const getReply = async (history) => callApi(history);
@@ -753,23 +833,50 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5F0EA', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: auditPhase === 'chat' ? 'center' : 'flex-start', padding: auditPhase === 'chat' ? 24 : '60px 24px' }}>
-      <div style={{ maxWidth: 720, width: '100%' }}>
+    <div style={{ minHeight: '100vh', background: '#F6F4ED', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: auditPhase === 'chat' ? 'center' : 'flex-start', padding: auditPhase === 'chat' ? 24 : '60px 24px', position: 'relative', overflow: 'clip' }}>
+      {auditPhase === 'landing' && <div className="lavis-aube" aria-hidden="true" />}
+      <div style={{ maxWidth: 720, width: '100%', position: 'relative', zIndex: 1 }}>
 
         {auditPhase !== 'chat' && (
           <div style={{ textAlign: 'center', marginBottom: 36 }}>
-            <h1 className="font-serif" style={{ color: '#C9A96E', fontSize: 42, fontWeight: 700, margin: '0 0 8px' }}>Nesso</h1>
-            <p style={{ color: '#1B2B4B', fontSize: 17, margin: 0, lineHeight: 1.5 }}>La solution IA pour gérer le patrimoine et la succession de ta famille</p>
+            <ChouetteEclat size={84} className="chouette-hero" style={{ display: 'block', margin: '0 auto 8px' }} />
+            <p className="font-serif" style={{ color: '#1F6B4A', fontSize: 22, margin: '0 0 20px' }}>Nesso</p>
+            <h1 className="font-serif" style={{ color: '#1A201C', fontSize: 'clamp(28px, 5.2vw, 46px)', lineHeight: 1.12, margin: '0 0 16px' }}>
+              <span className="ligne-h1"><span>L'État connaît votre succession par cœur.</span></span>
+              <span className="ligne-h1"><span style={{ color: '#1F6B4A' }}><span className="marque">Votre famille, non.<i aria-hidden="true"></i></span></span></span>
+            </h1>
+            <p style={{ color: '#4A544D', fontSize: 17, margin: '0 auto', lineHeight: 1.65, maxWidth: 580 }}>
+              Nesso éclaire ce que vous allez recevoir et transmettre : droits exacts, leviers légaux, échéances à ne pas manquer. En 10 minutes, sans rendez-vous, gratuitement.
+            </p>
+
+            {/* Frise des générations — le fil de la transmission qui s'allume */}
+            {auditPhase === 'landing' && (
+              <div className="frise" aria-hidden="true">
+                <div className="frise-rail"><div className="frise-flux" /></div>
+                <div className="frise-pts">
+                  {[
+                    ['Vos grands-parents', 'ce qui doit descendre'],
+                    ['Vos parents', 'ce qui se joue maintenant'],
+                    ['Vous', "là où tout s'éclaire"],
+                    ['Vos enfants', 'ce que vous préparez'],
+                  ].map(([titre, sous]) => (
+                    <div key={titre} className="frise-pt">
+                      <i></i><b>{titre}</b><span>{sous}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* ── BRANCHE 1 : LANDING ── */}
         {auditPhase === 'landing' && (
           <>
-          <div className="card" style={{ padding: 40, textAlign: 'center' }}>
-            <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', color: '#C9A96E', fontSize: 26 }}>✦</div>
-            <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 26, margin: '0 0 12px' }}>Votre audit patrimonial</h2>
-            <p style={{ color: '#6B7280', lineHeight: 1.75, marginBottom: 28, fontSize: 15 }}>
+          <div className="card reveal" style={{ padding: 40, textAlign: 'center' }}>
+            <div style={{ width: 60, height: 60, borderRadius: '50%', background: '#1A201C', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 22px', color: '#1F6B4A', fontSize: 26 }}>✦</div>
+            <h2 className="font-serif" style={{ color: '#1A201C', fontSize: 26, margin: '0 0 12px' }}>Votre audit patrimonial</h2>
+            <p style={{ color: '#4A544D', lineHeight: 1.75, marginBottom: 28, fontSize: 15 }}>
               Quelques questions pour construire votre tableau de bord personnalisé. <strong>5 à 15 minutes</strong> selon votre situation.
             </p>
 
@@ -778,11 +885,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               {hasSavedConversation && (
                 <>
                   <button onClick={handleContinuerConversation} disabled={loading}
-                    style={{ width: '100%', padding: '13px', fontSize: 14, background: '#C9A96E', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
+                    style={{ width: '100%', padding: '13px', fontSize: 14, background: '#1F6B4A', color: 'white', border: 'none', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600 }}>
                     ↺ Continuer ma conversation en cours →
                   </button>
                   <button onClick={handleReprendreConversation} disabled={loading}
-                    style={{ width: '100%', padding: '11px', fontSize: 13, background: 'white', color: '#1B2B4B', border: '1px solid #E5E7EB', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                    style={{ width: '100%', padding: '11px', fontSize: 13, background: 'white', color: '#1A201C', border: '1px solid #DDD8C9', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
                     {loading ? '⏳ Génération...' : '📊 Générer mon tableau depuis la dernière conversation'}
                   </button>
                 </>
@@ -793,21 +900,21 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               {/* ── Reprendre le tableau existant (user authentifié avec données sauvegardées) ── */}
               {onRetourDashboard && (
                 <button onClick={onRetourDashboard} disabled={loading}
-                  style={{ width: '100%', padding: '13px', fontSize: 14, background: 'white', color: '#1B2B4B', border: '1px solid #E5E7EB', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  style={{ width: '100%', padding: '13px', fontSize: 14, background: 'white', color: '#1A201C', border: '1px solid #DDD8C9', borderRadius: 10, cursor: loading ? 'wait' : 'pointer', fontFamily: 'DM Sans, sans-serif', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   {loading ? '⏳ Chargement…' : '✦ Reprendre mon tableau de bord →'}
                 </button>
               )}
-              <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'DM Sans, sans-serif' }}>
-                Voir l'exemple sans remplir →
+              <button onClick={handlePasserDashboard} style={{ background: 'none', border: 'none', color: '#5C635E', cursor: 'pointer', fontSize: 13, padding: 8, fontFamily: 'DM Sans, sans-serif' }}>
+                Voir la démo (famille fictive) →
               </button>
             </div>
 
             {/* Connexion pour utilisateurs existants */}
             {onLogin && (
-              <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid #F0EBE4' }}>
-                <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0 }}>
+              <div style={{ marginTop: 22, paddingTop: 18, borderTop: '1px solid #E3DFD3' }}>
+                <p style={{ color: '#5C635E', fontSize: 13, margin: 0 }}>
                   Vous avez déjà un compte ?{' '}
-                  <button onClick={onLogin} style={{ background: 'none', border: 'none', color: '#C9A96E', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', padding: 0, textDecoration: 'underline' }}>
+                  <button onClick={onLogin} style={{ background: 'none', border: 'none', color: '#1F6B4A', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', padding: 0, textDecoration: 'underline' }}>
                     Se connecter →
                   </button>
                 </p>
@@ -820,29 +927,30 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
             {/* Ornement décoratif d'ouverture */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginBottom: 24 }}>
-              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
-              <span style={{ color: '#C9A96E', fontSize: 14 }}>✦</span>
-              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
+              <div style={{ flex: '0 0 60px', height: 1, background: '#A8B5AA' }} />
+              <span style={{ color: '#1F6B4A', fontSize: 14 }}>✦</span>
+              <div style={{ flex: '0 0 60px', height: 1, background: '#A8B5AA' }} />
             </div>
 
-            <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', textAlign: 'center', margin: '0 0 16px' }}>Notre manifeste</p>
-            <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 30, fontWeight: 700, textAlign: 'center', margin: '0 0 18px', lineHeight: 1.25, letterSpacing: '-0.01em' }}>
+            <p className="reveal" style={{ color: '#1F6B4A', fontSize: 11, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', textAlign: 'center', margin: '0 0 16px' }}>Notre manifeste</p>
+            <h2 className="font-serif reveal" style={{ color: '#1A201C', fontSize: 30, fontWeight: 700, textAlign: 'center', margin: '0 0 18px', lineHeight: 1.25, letterSpacing: '-0.01em' }}>
               La clarté patrimoniale n'est plus réservée aux familles aisées.
             </h2>
-            <p style={{ color: '#6B7280', fontSize: 15, lineHeight: 1.75, textAlign: 'center', maxWidth: 560, margin: '0 auto 40px', fontStyle: 'italic' }}>
-              Une succession bien préparée peut représenter <strong style={{ color: '#1B2B4B', fontStyle: 'normal' }}>des dizaines de milliers d'euros</strong> conservés par votre famille. Jusqu'ici, ce savoir-faire restait inaccessible à la plupart des foyers.
+            <p className="reveal" style={{ color: '#4A544D', fontSize: 15, lineHeight: 1.75, textAlign: 'center', maxWidth: 560, margin: '0 auto 40px', fontStyle: 'italic' }}>
+              Une succession bien préparée peut représenter <strong style={{ color: '#1A201C', fontStyle: 'normal' }}>des dizaines de milliers d'euros</strong> conservés par votre famille. Jusqu'ici, ce savoir-faire restait inaccessible à la plupart des foyers.
             </p>
 
             {/* Tableau de constats — style éditorial */}
-            <div style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(27,43,75,0.08)', marginBottom: 36, boxShadow: '0 4px 24px rgba(27,43,75,0.04)' }}>
-              <div style={{ background: '#F5F0EA', padding: '12px 24px', borderBottom: '1px solid rgba(27,43,75,0.08)' }}>
-                <p style={{ color: '#1B2B4B', fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: 0 }}>Le constat — 15 dernières années</p>
+            <div className="reveal" style={{ background: 'white', borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(26,32,28,0.08)', marginBottom: 36, boxShadow: '0 4px 24px rgba(26,32,28,0.04)' }}>
+              <div style={{ background: '#F6F4ED', padding: '12px 24px', borderBottom: '1px solid rgba(26,32,28,0.08)' }}>
+                <p style={{ color: '#1A201C', fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', margin: 0 }}>Le constat — 15 dernières années</p>
               </div>
 
               {[
                 {
                   icon: '↑',
                   chiffre: '× 3',
+                  compteur: { cible: 3, prefixe: '× ' },
                   titre: 'Les recettes de l\'État sur les successions',
                   desc: 'De 7 milliards € en 2011 à 21,2 milliards € en 2025 : les droits de succession ont triplé en moins de 15 ans.',
                   source: 'Source : DGFiP',
@@ -851,6 +959,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 {
                   icon: '=',
                   chiffre: '100 k€',
+                  compteur: { cible: 100, suffixe: ' k€' },
                   titre: 'L\'abattement parent-enfant, inchangé depuis 2012',
                   desc: 'Le seuil d\'exonération n\'a pas bougé depuis 13 ans. Pendant ce temps, le prix moyen de l\'immobilier en France a augmenté de plus de 30 %. La fiscalité réelle progresse en silence.',
                   source: 'Source : article 779 du CGI',
@@ -864,20 +973,25 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                   ton: 'navy',
                 },
               ].map((c, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 22, padding: '22px 24px', borderTop: i > 0 ? '1px solid #F5F0EA' : 'none' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 22, padding: '22px 24px', borderTop: i > 0 ? '1px solid #F6F4ED' : 'none' }}>
                   <div style={{ flex: '0 0 56px', textAlign: 'center' }}>
-                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: c.ton === 'rouge' ? '#FEF2F2' : c.ton === 'orange' ? '#FFF8F0' : '#F0F4FF', color: c.ton === 'rouge' ? '#E24B4A' : c.ton === 'orange' ? '#C9A96E' : '#1B2B4B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, margin: '0 auto' }}>
+                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: c.ton === 'rouge' ? '#FAEDE7' : c.ton === 'orange' ? '#EDF4EE' : '#EAF2EC', color: c.ton === 'rouge' ? '#C2502F' : c.ton === 'orange' ? '#1F6B4A' : '#1A201C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, margin: '0 auto' }}>
                       {c.icon}
                     </div>
                   </div>
                   <div style={{ flex: '0 0 110px', display: 'flex', alignItems: 'center' }}>
-                    <p className="font-serif" style={{ color: '#C9A96E', fontSize: c.chiffre.length > 4 ? 19 : 28, fontWeight: 700, margin: 0, lineHeight: 1.05 }}>{c.chiffre}</p>
+                    {c.compteur ? (
+                      <CompteurConstat cible={c.compteur.cible} prefixe={c.compteur.prefixe || ''} suffixe={c.compteur.suffixe || ''}
+                        style={{ color: '#1F6B4A', fontSize: 28, fontWeight: 700, margin: 0, lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }} />
+                    ) : (
+                      <p className="font-serif" style={{ color: '#1F6B4A', fontSize: c.chiffre.length > 4 ? 19 : 28, fontWeight: 700, margin: 0, lineHeight: 1.05 }}>{c.chiffre}</p>
+                    )}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <p style={{ color: '#1B2B4B', fontSize: 14, fontWeight: 600, margin: '0 0 4px' }}>{c.titre}</p>
-                    <p style={{ color: '#7A7A8C', fontSize: 13, lineHeight: 1.65, margin: '0 0 6px' }}>{c.desc}</p>
+                    <p style={{ color: '#1A201C', fontSize: 14, fontWeight: 600, margin: '0 0 4px' }}>{c.titre}</p>
+                    <p style={{ color: '#5C635E', fontSize: 13, lineHeight: 1.65, margin: '0 0 6px' }}>{c.desc}</p>
                     {c.source && (
-                      <p style={{ color: '#A8A8B8', fontSize: 11, fontStyle: 'italic', margin: 0 }}>{c.source}</p>
+                      <p style={{ color: '#8B948C', fontSize: 11, fontStyle: 'italic', margin: 0 }}>{c.source}</p>
                     )}
                   </div>
                 </div>
@@ -885,25 +999,25 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
             </div>
 
             {/* Bloc Mission — style citation éditoriale */}
-            <div style={{ position: 'relative', background: 'linear-gradient(135deg, #1B2B4B 0%, #243656 100%)', borderRadius: 16, padding: '40px 36px 32px', color: 'white', overflow: 'hidden' }}>
+            <div className="reveal" style={{ position: 'relative', background: 'linear-gradient(135deg, #1A201C 0%, #253029 100%)', borderRadius: 16, padding: '40px 36px 32px', color: 'white', overflow: 'hidden' }}>
               {/* Guillemet décoratif */}
-              <span className="font-serif" style={{ position: 'absolute', top: 4, left: 22, fontSize: 110, color: 'rgba(201,169,110,0.18)', lineHeight: 1, pointerEvents: 'none' }}>“</span>
+              <span className="font-serif" style={{ position: 'absolute', top: 4, left: 22, fontSize: 110, color: 'rgba(31,107,74,0.18)', lineHeight: 1, pointerEvents: 'none' }}>“</span>
 
               <div style={{ position: 'relative' }}>
-                <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', margin: '0 0 16px' }}>Notre conviction</p>
+                <p style={{ color: '#1F6B4A', fontSize: 11, fontWeight: 600, letterSpacing: '0.22em', textTransform: 'uppercase', margin: '0 0 16px' }}>Notre conviction</p>
 
                 <p className="font-serif" style={{ fontSize: 22, lineHeight: 1.5, margin: '0 0 18px', color: 'white', fontWeight: 400 }}>
-                  Aujourd'hui, l'IA permet à chacun de prendre en main son patrimoine et d'anticiper sa succession <span style={{ color: '#C9A96E' }}>à un coût quasi nul</span>.
+                  Aujourd'hui, l'IA permet à chacun de prendre en main son patrimoine et d'anticiper sa succession <span style={{ color: '#1F6B4A' }}>à un coût quasi nul</span>.
                 </p>
 
                 <p style={{ fontSize: 15, lineHeight: 1.75, margin: '0 0 28px', color: 'rgba(255,255,255,0.78)' }}>
-                  C'est la mission de <strong style={{ color: '#C9A96E' }}>Nesso</strong> : apporter cette connaissance et cette clarté à tous les foyers, et casser l'inégalité d'accès au conseil patrimonial.
+                  C'est la mission de <strong style={{ color: '#1F6B4A' }}>Nesso</strong> : apporter cette connaissance et cette clarté à tous les foyers, et casser l'inégalité d'accès au conseil patrimonial.
                 </p>
 
                 {/* Signature */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 18, borderTop: '1px solid rgba(201,169,110,0.2)' }}>
-                  <div style={{ width: 40, height: 1, background: 'rgba(201,169,110,0.45)' }} />
-                  <p className="font-serif" style={{ fontStyle: 'italic', color: '#C9A96E', fontSize: 16, margin: 0, fontWeight: 400 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, paddingTop: 18, borderTop: '1px solid rgba(31,107,74,0.2)' }}>
+                  <div style={{ width: 40, height: 1, background: 'rgba(31,107,74,0.45)' }} />
+                  <p className="font-serif" style={{ fontStyle: 'italic', color: '#1F6B4A', fontSize: 16, margin: 0, fontWeight: 400 }}>
                     L'équipe Nesso
                   </p>
                 </div>
@@ -912,9 +1026,9 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
             {/* Ornement décoratif de fermeture */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 32 }}>
-              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
-              <span style={{ color: '#C9A96E', fontSize: 10 }}>◆</span>
-              <div style={{ flex: '0 0 60px', height: 1, background: '#D1C4B0' }} />
+              <div style={{ flex: '0 0 60px', height: 1, background: '#A8B5AA' }} />
+              <span style={{ color: '#1F6B4A', fontSize: 10 }}>◆</span>
+              <div style={{ flex: '0 0 60px', height: 1, background: '#A8B5AA' }} />
             </div>
           </div>
           </>
@@ -925,15 +1039,15 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
           <div className="card" style={{ padding: '36px 32px' }}>
             {/* En-tête + barre de progression */}
             <div style={{ marginBottom: 28 }}>
-              <p style={{ color: '#C9A96E', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', margin: '0 0 5px' }}>
+              <p style={{ color: '#1F6B4A', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase', margin: '0 0 5px' }}>
                 Étape {formStep} sur {totalSteps}
               </p>
-              <h2 className="font-serif" style={{ color: '#1B2B4B', fontSize: 24, margin: '0 0 14px' }}>
+              <h2 className="font-serif" style={{ color: '#1A201C', fontSize: 24, margin: '0 0 14px' }}>
                 {stepTitles[formStep - 1]}
               </h2>
               <div style={{ display: 'flex', gap: 4 }}>
                 {Array.from({ length: totalSteps }).map((_, i) => (
-                  <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < formStep ? '#C9A96E' : '#E5E7EB', transition: 'background 0.3s' }} />
+                  <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < formStep ? '#1F6B4A' : '#DDD8C9', transition: 'background 0.3s' }} />
                 ))}
               </div>
             </div>
@@ -942,24 +1056,24 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
             {formStep === 1 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre prénom *</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre prénom *</label>
                   <input type="text" value={form.prenom} autoFocus
                     onChange={e => setForm(p => ({ ...p, prenom: e.target.value }))}
                     placeholder="Thomas"
-                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre âge</label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre âge</label>
                     <input type="number" value={form.age} min="18" max="100"
                       onChange={e => setForm(p => ({ ...p, age: e.target.value }))}
                       placeholder="38"
-                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                      style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                   </div>
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre statut</label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>Votre statut</label>
                     <select value={form.profession} onChange={e => setForm(p => ({ ...p, profession: e.target.value }))}
-                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}>
+                      style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}>
                       <option value="salarié">Salarié(e)</option>
                       <option value="cadre">Cadre</option>
                       <option value="dirigeant">Dirigeant / TNS</option>
@@ -970,11 +1084,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                   </div>
                 </div>
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Niveau de connaissance patrimoniale</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 10 }}>Niveau de connaissance patrimoniale</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {[['debutant', 'Débutant'], ['intermediaire', 'Intermédiaire'], ['avance', 'Expert']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, niveau: val }))}
-                        style={{ flex: 1, padding: '10px 6px', border: `2px solid ${form.niveau === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.niveau === val ? '#FDF8F0' : 'white', color: form.niveau === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.niveau === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        style={{ flex: 1, padding: '10px 6px', border: `2px solid ${form.niveau === val ? '#1F6B4A' : '#DDD8C9'}`, borderRadius: 8, background: form.niveau === val ? '#E4EEE5' : 'white', color: form.niveau === val ? '#1F6B4A' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.niveau === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                         {lbl}
                       </button>
                     ))}
@@ -987,22 +1101,22 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
             {formStep === 2 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Situation civile *</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 10 }}>Situation civile *</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {[['celibataire', 'Célibataire', '◯'], ['marie', 'Marié(e)', '◎'], ['pacse', 'Pacsé(e)', '◑'], ['concubin', 'En couple', '◐']].map(([val, lbl, ico]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, situation_civile: val }))}
-                        style={{ padding: '12px 8px', border: `2px solid ${form.situation_civile === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 10, background: form.situation_civile === val ? '#F0F4FF' : 'white', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
-                        <div style={{ fontSize: 18, marginBottom: 4, color: '#1B2B4B' }}>{ico}</div>
-                        <div style={{ fontSize: 13, fontWeight: form.situation_civile === val ? 600 : 400, color: form.situation_civile === val ? '#1B2B4B' : '#6B7280' }}>{lbl}</div>
+                        style={{ padding: '12px 8px', border: `2px solid ${form.situation_civile === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 10, background: form.situation_civile === val ? '#EAF2EC' : 'white', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        <div style={{ fontSize: 18, marginBottom: 4, color: '#1A201C' }}>{ico}</div>
+                        <div style={{ fontSize: 13, fontWeight: form.situation_civile === val ? 600 : 400, color: form.situation_civile === val ? '#1A201C' : '#4A544D' }}>{lbl}</div>
                       </button>
                     ))}
                   </div>
                 </div>
                 {form.situation_civile === 'marie' && (
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Régime matrimonial</label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>Régime matrimonial</label>
                     <select value={form.regime} onChange={e => setForm(p => ({ ...p, regime: e.target.value }))}
-                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}>
+                      style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }}>
                       <option value="communaute">Communauté légale (par défaut)</option>
                       <option value="separation">Séparation de biens</option>
                       <option value="universel">Communauté universelle</option>
@@ -1012,27 +1126,27 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 )}
                 {form.situation_civile && form.situation_civile !== 'celibataire' && (
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>
                       {form.situation_civile === 'marie' ? 'Conjoint(e)' : form.situation_civile === 'pacse' ? 'Partenaire' : 'Compagnon / Compagne'}
                     </label>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input type="text" value={form.conjoint_prenom}
                         onChange={e => setForm(p => ({ ...p, conjoint_prenom: e.target.value }))}
                         placeholder="Prénom"
-                        style={{ flex: 2, border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
+                        style={{ flex: 2, border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
                       <input type="number" value={form.conjoint_age || ''} min="18" max="100"
                         onChange={e => setForm(p => ({ ...p, conjoint_age: e.target.value }))}
                         placeholder="Âge"
-                        style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
+                        style={{ flex: 1, border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
                     </div>
                   </div>
                 )}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Enfants</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 10 }}>Enfants</label>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {['0','1','2','3','4+'].map(n => (
                       <button key={n} onClick={() => setForm(p => ({ ...p, enfants: n }))}
-                        style={{ flex: 1, padding: '10px 4px', border: `2px solid ${form.enfants === n ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.enfants === n ? '#FDF8F0' : 'white', color: form.enfants === n ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 14, fontWeight: form.enfants === n ? 700 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        style={{ flex: 1, padding: '10px 4px', border: `2px solid ${form.enfants === n ? '#1F6B4A' : '#DDD8C9'}`, borderRadius: 8, background: form.enfants === n ? '#E4EEE5' : 'white', color: form.enfants === n ? '#1F6B4A' : '#4A544D', cursor: 'pointer', fontSize: 14, fontWeight: form.enfants === n ? 700 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                         {n}
                       </button>
                     ))}
@@ -1040,16 +1154,16 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 </div>
                 {parseInt(form.enfants) > 0 && (
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Prénoms et âges des enfants <span style={{ color: '#A8A8B8' }}>(optionnel)</span></label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Prénoms et âges des enfants <span style={{ color: '#8B948C' }}>(optionnel)</span></label>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {Array.from({ length: Math.min(form.enfants === '4+' ? 4 : parseInt(form.enfants), 4) }).map((_, i) => (
                         <div key={i} style={{ display: 'flex', gap: 8 }}>
                           <input type="text" placeholder={`Enfant ${i + 1} — prénom`} value={form.enfants_data[i]?.prenom || ''}
                             onChange={e => { const d = [...(form.enfants_data || [])]; d[i] = { ...(d[i] || {}), prenom: e.target.value }; setForm(p => ({ ...p, enfants_data: d })); }}
-                            style={{ flex: 2, border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }} />
+                            style={{ flex: 2, border: '1px solid #DDD8C9', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }} />
                           <input type="number" placeholder="Âge" min="0" max="60" value={form.enfants_data[i]?.age || ''}
                             onChange={e => { const d = [...(form.enfants_data || [])]; d[i] = { ...(d[i] || {}), age: e.target.value }; setForm(p => ({ ...p, enfants_data: d })); }}
-                            style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }} />
+                            style={{ flex: 1, border: '1px solid #DDD8C9', borderRadius: 8, padding: '9px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif' }} />
                         </div>
                       ))}
                     </div>
@@ -1059,8 +1173,8 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
                     <input type="checkbox" checked={form.famille_recomposee}
                       onChange={e => setForm(p => ({ ...p, famille_recomposee: e.target.checked }))}
-                      style={{ width: 16, height: 16, accentColor: '#1B2B4B' }} />
-                    <span style={{ color: '#6B7280', fontSize: 13 }}>Famille recomposée (enfants d'une union précédente)</span>
+                      style={{ width: 16, height: 16, accentColor: '#1A201C' }} />
+                    <span style={{ color: '#4A544D', fontSize: 13 }}>Famille recomposée (enfants d'une union précédente)</span>
                   </label>
                 )}
               </div>
@@ -1071,11 +1185,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 {/* Parents */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 10 }}>Vos parents</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 10 }}>Vos parents</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {[['les_deux','Les deux en vie'],['pere','Père uniquement'],['mere','Mère uniquement'],['non','Aucun']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, parents_en_vie: val }))}
-                        style={{ padding: '11px 8px', border: `2px solid ${form.parents_en_vie === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_en_vie === val ? '#F0F4FF' : 'white', color: form.parents_en_vie === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.parents_en_vie === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        style={{ padding: '11px 8px', border: `2px solid ${form.parents_en_vie === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.parents_en_vie === val ? '#EAF2EC' : 'white', color: form.parents_en_vie === val ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.parents_en_vie === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                         {lbl}
                       </button>
                     ))}
@@ -1086,29 +1200,29 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                     <div style={{ display: 'flex', gap: 10 }}>
                       {(form.parents_en_vie === 'les_deux' || form.parents_en_vie === 'pere') && (
                         <div style={{ flex: 1 }}>
-                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 6 }}>Âge du père</label>
+                          <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 6 }}>Âge du père</label>
                           <input type="number" min="40" max="110" placeholder="ex. 72"
                             value={form.pere_age}
                             onChange={e => setForm(p => ({ ...p, pere_age: e.target.value }))}
-                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                            style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                         </div>
                       )}
                       {(form.parents_en_vie === 'les_deux' || form.parents_en_vie === 'mere') && (
                         <div style={{ flex: 1 }}>
-                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 6 }}>Âge de la mère</label>
+                          <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 6 }}>Âge de la mère</label>
                           <input type="number" min="40" max="110" placeholder="ex. 68"
                             value={form.mere_age}
                             onChange={e => setForm(p => ({ ...p, mere_age: e.target.value }))}
-                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                            style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                         </div>
                       )}
                     </div>
                     <div>
-                      <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Ont-ils organisé leur transmission ?</label>
+                      <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Ont-ils organisé leur transmission ?</label>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         {[['oui','Oui'],['en_partie','En partie'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
                           <button key={val} onClick={() => setForm(p => ({ ...p, parents_orga: val }))}
-                            style={{ padding: '10px', border: `2px solid ${form.parents_orga === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.parents_orga === val ? '#FDF8F0' : 'white', color: form.parents_orga === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.parents_orga === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                            style={{ padding: '10px', border: `2px solid ${form.parents_orga === val ? '#1F6B4A' : '#DDD8C9'}`, borderRadius: 8, background: form.parents_orga === val ? '#E4EEE5' : 'white', color: form.parents_orga === val ? '#1F6B4A' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.parents_orga === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                             {lbl}
                           </button>
                         ))}
@@ -1122,11 +1236,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                   ['gp_paternels','gp_paternels_age','gp_paternels_age2','Grands-parents paternels'],
                 ].map(([field, age1Field, age2Field, label]) => (
                   <div key={field}>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>{label}</label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>{label}</label>
                     <div style={{ display: 'flex', gap: 8, marginBottom: form[field] && form[field] !== 'non' ? 10 : 0 }}>
                       {[['les_deux','Les deux'],['un',"L'un d'eux"],['non','Aucun']].map(([val, lbl]) => (
                         <button key={val} onClick={() => setForm(p => ({ ...p, [field]: val }))}
-                          style={{ flex: 1, padding: '10px 4px', border: `2px solid ${form[field] === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form[field] === val ? '#F0F4FF' : 'white', color: form[field] === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form[field] === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          style={{ flex: 1, padding: '10px 4px', border: `2px solid ${form[field] === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form[field] === val ? '#EAF2EC' : 'white', color: form[field] === val ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form[field] === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                           {lbl}
                         </button>
                       ))}
@@ -1134,21 +1248,21 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                     {form[field] && form[field] !== 'non' && (
                       <div style={{ display: 'flex', gap: 10 }}>
                         <div style={{ flex: 1 }}>
-                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>
+                          <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 4 }}>
                             {form[field] === 'les_deux' ? '1er grand-parent' : 'Âge'}
                           </label>
                           <input type="number" min="50" max="115" placeholder="ex. 78"
                             value={form[age1Field]}
                             onChange={e => setForm(p => ({ ...p, [age1Field]: e.target.value }))}
-                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                            style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                         </div>
                         {form[field] === 'les_deux' && (
                           <div style={{ flex: 1 }}>
-                            <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>2e grand-parent</label>
+                            <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 4 }}>2e grand-parent</label>
                             <input type="number" min="50" max="115" placeholder="ex. 75"
                               value={form[age2Field]}
                               onChange={e => setForm(p => ({ ...p, [age2Field]: e.target.value }))}
-                              style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                              style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '9px 12px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                           </div>
                         )}
                       </div>
@@ -1157,13 +1271,13 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 ))}
                 {/* Événement */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>
-                    Un événement de vie en cours ou à venir ? <span style={{ color: '#A8A8B8' }}>(optionnel)</span>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>
+                    Un événement de vie en cours ou à venir ? <span style={{ color: '#8B948C' }}>(optionnel)</span>
                   </label>
                   <input type="text" value={form.evenement}
                     onChange={e => setForm(p => ({ ...p, evenement: e.target.value }))}
                     placeholder="Retraite, héritage, vente, achat, divorce, naissance…"
-                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                 </div>
               </div>
             )}
@@ -1191,7 +1305,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               };
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>
+                  <p style={{ color: '#5C635E', fontSize: 14, margin: 0, lineHeight: 1.6 }}>
                     Sélectionnez vos actifs et renseignez un montant estimé. Tout est optionnel — même une approximation aide à calibrer votre tableau de bord.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1205,22 +1319,22 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                             if (d[key] && d[key].length > 0) delete d[key];
                             else d[key] = [{ valeur: '', proprio: '' }];
                             return { ...p, patrimoine_detail: d };
-                          })} style={{ width: '100%', padding: '10px 14px', border: `2px solid ${active ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: active ? '8px 8px 0 0' : 8, background: active ? '#F0F4FF' : 'white', color: active ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            {label} {active && <span style={{ color: '#C9A96E' }}>✓</span>}
+                          })} style={{ width: '100%', padding: '10px 14px', border: `2px solid ${active ? '#1A201C' : '#DDD8C9'}`, borderRadius: active ? '8px 8px 0 0' : 8, background: active ? '#EAF2EC' : 'white', color: active ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            {label} {active && <span style={{ color: '#1F6B4A' }}>✓</span>}
                           </button>
                           {active && (
-                            <div style={{ border: '2px solid #1B2B4B', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', background: '#F8FAFF', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <div style={{ border: '2px solid #1A201C', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '10px 12px', background: '#F8FAFF', display: 'flex', flexDirection: 'column', gap: 10 }}>
                               {items.map((item, idx) => (
-                                <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: idx > 0 ? 8 : 0, borderTop: idx > 0 ? '1px solid #E5E7EB' : 'none' }}>
+                                <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: idx > 0 ? 8 : 0, borderTop: idx > 0 ? '1px solid #DDD8C9' : 'none' }}>
                                   {items.length > 1 && (
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                      <span style={{ color: '#A8A8B8', fontSize: 12 }}>N° {idx + 1}</span>
+                                      <span style={{ color: '#8B948C', fontSize: 12 }}>N° {idx + 1}</span>
                                       <button onClick={() => setForm(p => {
                                         const d = { ...(p.patrimoine_detail || {}) };
                                         const newItems = d[key].filter((_, i) => i !== idx);
                                         if (newItems.length === 0) delete d[key]; else d[key] = newItems;
                                         return { ...p, patrimoine_detail: d };
-                                      })} style={{ background: 'none', border: 'none', color: '#E24B4A', cursor: 'pointer', fontSize: 12, padding: '2px 4px', fontFamily: 'DM Sans, sans-serif' }}>
+                                      })} style={{ background: 'none', border: 'none', color: '#C2502F', cursor: 'pointer', fontSize: 12, padding: '2px 4px', fontFamily: 'DM Sans, sans-serif' }}>
                                         × supprimer
                                       </button>
                                     </div>
@@ -1232,7 +1346,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                                         d[key] = d[key].map((it, i) => i === idx ? { ...it, nom: e.target.value } : it);
                                         return { ...p, patrimoine_detail: d };
                                       })}
-                                      style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                                      style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                                   )}
                                   <input type="number" placeholder={`Montant estimé (€) — ${placeholder}`} value={item.valeur || ''}
                                     onChange={e => setForm(p => {
@@ -1240,10 +1354,10 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                                       d[key] = d[key].map((it, i) => i === idx ? { ...it, valeur: e.target.value } : it);
                                       return { ...p, patrimoine_detail: d };
                                     })}
-                                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                                    style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                                   {hasConj && (
                                     <div>
-                                      <p style={{ color: '#6B7280', fontSize: 12, margin: '0 0 6px' }}>Appartient à :</p>
+                                      <p style={{ color: '#4A544D', fontSize: 12, margin: '0 0 6px' }}>Appartient à :</p>
                                       <div style={{ display: 'flex', gap: 6 }}>
                                         {[['user', 'À moi seul(e)'], ['conjoint', `À ${form.conjoint_prenom}`], ['both', 'Aux deux']].map(([val, lbl]) => (
                                           <button key={val} onClick={() => setForm(p => {
@@ -1251,7 +1365,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                                             d[key] = d[key].map((it, i) => i === idx ? { ...it, proprio: val } : it);
                                             return { ...p, patrimoine_detail: d };
                                           })}
-                                            style={{ flex: 1, padding: '7px 4px', border: `2px solid ${item.proprio === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 7, background: item.proprio === val ? '#FDF8F0' : 'white', color: item.proprio === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 12, fontWeight: item.proprio === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                                            style={{ flex: 1, padding: '7px 4px', border: `2px solid ${item.proprio === val ? '#1F6B4A' : '#DDD8C9'}`, borderRadius: 7, background: item.proprio === val ? '#E4EEE5' : 'white', color: item.proprio === val ? '#1F6B4A' : '#4A544D', cursor: 'pointer', fontSize: 12, fontWeight: item.proprio === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                                             {lbl}
                                           </button>
                                         ))}
@@ -1265,7 +1379,7 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                                   const d = { ...(p.patrimoine_detail || {}) };
                                   d[key] = [...(d[key] || []), { valeur: '', proprio: '' }];
                                   return { ...p, patrimoine_detail: d };
-                                })} style={{ padding: '7px 12px', border: '1px dashed #C9A96E', borderRadius: 7, background: 'none', color: '#C9A96E', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', alignSelf: 'flex-start' }}>
+                                })} style={{ padding: '7px 12px', border: '1px dashed #1F6B4A', borderRadius: 7, background: 'none', color: '#1F6B4A', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', alignSelf: 'flex-start' }}>
                                   + Ajouter {ASSET_ADD_LABEL[key] || 'un autre'}
                                 </button>
                               )}
@@ -1278,13 +1392,13 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                   {/* Revenus du foyer — partagés tous focus */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <label style={{ color: '#6B7280', fontSize: 13 }}>
-                        Revenus annuels <span style={{ color: '#A8A8B8' }}>(optionnel — même estimés)</span>
+                      <label style={{ color: '#4A544D', fontSize: 13 }}>
+                        Revenus annuels <span style={{ color: '#8B948C' }}>(optionnel — même estimés)</span>
                       </label>
                       <div style={{ display: 'flex', gap: 4 }}>
                         {[['net', 'Net'], ['brut', 'Brut']].map(([val, lbl]) => (
                           <button key={val} onClick={() => setForm(p => ({ ...p, revenus_brut_net: val }))}
-                            style={{ padding: '4px 10px', border: `1px solid ${form.revenus_brut_net === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 6, background: form.revenus_brut_net === val ? '#1B2B4B' : 'white', color: form.revenus_brut_net === val ? 'white' : '#6B7280', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
+                            style={{ padding: '4px 10px', border: `1px solid ${form.revenus_brut_net === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 6, background: form.revenus_brut_net === val ? '#1A201C' : 'white', color: form.revenus_brut_net === val ? 'white' : '#4A544D', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
                             {lbl}
                           </button>
                         ))}
@@ -1292,23 +1406,23 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: hasConj ? '1fr 1fr' : '1fr', gap: 8 }}>
                       <div>
-                        {hasConj && <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>Vos revenus</label>}
+                        {hasConj && <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 4 }}>Vos revenus</label>}
                         <input type="number" value={form.revenus_user || ''} min="0"
                           onChange={e => setForm(p => ({ ...p, revenus_user: e.target.value }))}
                           placeholder="ex : 60 000"
-                          style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                          style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                       </div>
                       {hasConj && (
                         <div>
-                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 4 }}>Revenus de {form.conjoint_prenom}</label>
+                          <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 4 }}>Revenus de {form.conjoint_prenom}</label>
                           <input type="number" value={form.revenus_conjoint || ''} min="0"
                             onChange={e => setForm(p => ({ ...p, revenus_conjoint: e.target.value }))}
                             placeholder="ex : 40 000"
-                            style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                            style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                         </div>
                       )}
                     </div>
-                    <p style={{ color: '#A8A8B8', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+                    <p style={{ color: '#8B948C', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
                       Permet de calibrer les recommandations fiscales dans votre tableau de bord.
                     </p>
                   </div>
@@ -1319,8 +1433,8 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
             {/* ── Étape 5 : Focus ── */}
             {formStep === 5 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <p style={{ color: '#7A7A8C', fontSize: 14, margin: '0 0 8px', lineHeight: 1.6 }}>
-                  Pour un audit approfondi et pertinent, Nesso se concentre sur <strong style={{ color: '#1B2B4B' }}>un axe à la fois</strong>. Quelle est votre priorité ?
+                <p style={{ color: '#5C635E', fontSize: 14, margin: '0 0 8px', lineHeight: 1.6 }}>
+                  Pour un audit approfondi et pertinent, Nesso se concentre sur <strong style={{ color: '#1A201C' }}>un axe à la fois</strong>. Quelle est votre priorité ?
                 </p>
                 {[
                   { val: 'A', icon: '↑', label: 'Ce que je vais recevoir', desc: 'Comprendre et organiser la transmission de mes parents et grands-parents de mon vivant.', show: form.parents_en_vie !== 'non' },
@@ -1328,40 +1442,40 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                   { val: 'C', icon: '◎', label: 'Réduire ma fiscalité', desc: 'Optimiser mes impôts cette année et structurer mon patrimoine sur le long terme.', show: true },
                 ].filter(o => o.show).map(({ val, icon, label, desc }) => (
                   <div key={val} onClick={() => setForm(p => ({ ...p, focus: val }))}
-                    style={{ display: 'flex', gap: 16, alignItems: 'flex-start', border: `2px solid ${form.focus === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer', background: form.focus === val ? '#FDF8F0' : 'white', transition: 'all 0.15s' }}>
-                    <span style={{ fontSize: 22, color: '#C9A96E', flexShrink: 0, marginTop: 2 }}>{icon}</span>
+                    style={{ display: 'flex', gap: 16, alignItems: 'flex-start', border: `2px solid ${form.focus === val ? '#1F6B4A' : '#DDD8C9'}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer', background: form.focus === val ? '#E4EEE5' : 'white', transition: 'all 0.15s' }}>
+                    <span style={{ fontSize: 22, color: '#1F6B4A', flexShrink: 0, marginTop: 2 }}>{icon}</span>
                     <div style={{ flex: 1 }}>
-                      <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 15, margin: '0 0 5px' }}>{label}</p>
-                      <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0, lineHeight: 1.5 }}>{desc}</p>
+                      <p style={{ fontWeight: 600, color: '#1A201C', fontSize: 15, margin: '0 0 5px' }}>{label}</p>
+                      <p style={{ color: '#5C635E', fontSize: 13, margin: 0, lineHeight: 1.5 }}>{desc}</p>
                     </div>
-                    {form.focus === val && <span style={{ color: '#C9A96E', fontSize: 20, flexShrink: 0, marginTop: 2 }}>✓</span>}
+                    {form.focus === val && <span style={{ color: '#1F6B4A', fontSize: 20, flexShrink: 0, marginTop: 2 }}>✓</span>}
                   </div>
                 ))}
-                <p style={{ color: '#A8A8B8', fontSize: 12, margin: '4px 0 0' }}>Vous pourrez explorer les autres axes avec Nesso+.</p>
+                <p style={{ color: '#8B948C', fontSize: 12, margin: '4px 0 0' }}>Vous pourrez explorer les autres axes avec Nesso+.</p>
               </div>
             )}
 
             {/* ── Étape 6 : Sous-formulaire focus ── */}
             {formStep === 6 && form.focus === 'A' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Quelques précisions pour calibrer l'audit sur ce que vous allez recevoir.</p>
+                <p style={{ color: '#5C635E', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Quelques précisions pour calibrer l'audit sur ce que vous allez recevoir.</p>
                 {/* Patrimoine parents */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos parents <span style={{ color: '#A8A8B8' }}>(même approximatif)</span></label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos parents <span style={{ color: '#8B948C' }}>(même approximatif)</span></label>
                   <input type="number" value={form.parents_patrimoine || ''} min="0"
                     onChange={e => setForm(p => ({ ...p, parents_patrimoine: e.target.value }))}
                     placeholder="ex : 600 000"
-                    style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                    style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                 </div>
                 {/* Composition patrimoine parents */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#A8A8B8' }}>(plusieurs choix possibles)</span></label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#8B948C' }}>(plusieurs choix possibles)</span></label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {[['Immobilier','🏠'],['Épargne / financier','💰'],['Entreprise','🏢'],['Bien étranger','🌍'],['Autre','◇']].map(([lbl, ico]) => {
                       const sel = (form.parents_compo || []).includes(lbl);
                       return (
                         <button key={lbl} onClick={() => setForm(p => ({ ...p, parents_compo: sel ? p.parents_compo.filter(x => x !== lbl) : [...(p.parents_compo||[]), lbl] }))}
-                          style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 20, background: sel ? '#F0F4FF' : 'white', color: sel ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1A201C' : '#DDD8C9'}`, borderRadius: 20, background: sel ? '#EAF2EC' : 'white', color: sel ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                           {ico} {lbl}
                         </button>
                       );
@@ -1372,21 +1486,21 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 {((form.gp_maternels && form.gp_maternels !== 'non') || (form.gp_paternels && form.gp_paternels !== 'non')) && (
                   <>
                     <div>
-                      <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos grands-parents <span style={{ color: '#A8A8B8' }}>(même approximatif)</span></label>
+                      <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 6 }}>Patrimoine estimé de vos grands-parents <span style={{ color: '#8B948C' }}>(même approximatif)</span></label>
                       <input type="number" value={form.gp_patrimoine || ''} min="0"
                         onChange={e => setForm(p => ({ ...p, gp_patrimoine: e.target.value }))}
                         placeholder="ex : 400 000"
-                        style={{ width: '100%', border: '1px solid #E5E7EB', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
+                        style={{ width: '100%', border: '1px solid #DDD8C9', borderRadius: 8, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif', boxSizing: 'border-box' }} />
                     </div>
                     {form.gp_patrimoine && (
                       <div>
-                        <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#A8A8B8' }}>(si vous le savez)</span></label>
+                        <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Composition <span style={{ color: '#8B948C' }}>(si vous le savez)</span></label>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {[['Immobilier','🏠'],['Épargne / financier','💰'],['Entreprise','🏢'],['Bien étranger','🌍'],['Autre','◇']].map(([lbl, ico]) => {
                             const sel = (form.gp_compo || []).includes(lbl);
                             return (
                               <button key={lbl} onClick={() => setForm(p => ({ ...p, gp_compo: sel ? p.gp_compo.filter(x => x !== lbl) : [...(p.gp_compo||[]), lbl] }))}
-                                style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 20, background: sel ? '#F0F4FF' : 'white', color: sel ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                                style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1A201C' : '#DDD8C9'}`, borderRadius: 20, background: sel ? '#EAF2EC' : 'white', color: sel ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                                 {ico} {lbl}
                               </button>
                             );
@@ -1399,15 +1513,15 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 {/* Oncles / tantes — si GP en vie */}
                 {(form.gp_maternels === 'les_deux' || form.gp_maternels === 'un' || form.gp_paternels === 'les_deux' || form.gp_paternels === 'un') && (
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Oncles et tantes <span style={{ color: '#A8A8B8' }}>(enfants de vos grands-parents, hors vos parents)</span></label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Oncles et tantes <span style={{ color: '#8B948C' }}>(enfants de vos grands-parents, hors vos parents)</span></label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       {form.gp_maternels !== 'non' && form.gp_maternels && (
                         <div>
-                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 6 }}>Côté maternel</label>
+                          <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 6 }}>Côté maternel</label>
                           <div style={{ display: 'flex', gap: 6 }}>
                             {['0','1','2','3','4+'].map(n => (
                               <button key={n} onClick={() => setForm(p => ({ ...p, oncles_tantes_maternels: n }))}
-                                style={{ flex: 1, padding: '8px 4px', border: `2px solid ${form.oncles_tantes_maternels === n ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.oncles_tantes_maternels === n ? '#F0F4FF' : 'white', color: form.oncles_tantes_maternels === n ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.oncles_tantes_maternels === n ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                                style={{ flex: 1, padding: '8px 4px', border: `2px solid ${form.oncles_tantes_maternels === n ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.oncles_tantes_maternels === n ? '#EAF2EC' : 'white', color: form.oncles_tantes_maternels === n ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.oncles_tantes_maternels === n ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                                 {n}
                               </button>
                             ))}
@@ -1416,11 +1530,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                       )}
                       {form.gp_paternels !== 'non' && form.gp_paternels && (
                         <div>
-                          <label style={{ color: '#A8A8B8', fontSize: 12, display: 'block', marginBottom: 6 }}>Côté paternel</label>
+                          <label style={{ color: '#8B948C', fontSize: 12, display: 'block', marginBottom: 6 }}>Côté paternel</label>
                           <div style={{ display: 'flex', gap: 6 }}>
                             {['0','1','2','3','4+'].map(n => (
                               <button key={n} onClick={() => setForm(p => ({ ...p, oncles_tantes_paternels: n }))}
-                                style={{ flex: 1, padding: '8px 4px', border: `2px solid ${form.oncles_tantes_paternels === n ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.oncles_tantes_paternels === n ? '#F0F4FF' : 'white', color: form.oncles_tantes_paternels === n ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.oncles_tantes_paternels === n ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                                style={{ flex: 1, padding: '8px 4px', border: `2px solid ${form.oncles_tantes_paternels === n ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.oncles_tantes_paternels === n ? '#EAF2EC' : 'white', color: form.oncles_tantes_paternels === n ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.oncles_tantes_paternels === n ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                                 {n}
                               </button>
                             ))}
@@ -1432,11 +1546,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 )}
                 {/* Fratrie */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Vos frères et sœurs <span style={{ color: '#A8A8B8' }}>(pour calculer le partage entre héritiers)</span></label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Vos frères et sœurs <span style={{ color: '#8B948C' }}>(pour calculer le partage entre héritiers)</span></label>
                   <div style={{ display: 'flex', gap: 6 }}>
                     {['0','1','2','3','4+'].map(n => (
                       <button key={n} onClick={() => setForm(p => ({ ...p, fratrie: n }))}
-                        style={{ flex: 1, padding: '9px 4px', border: `2px solid ${form.fratrie === n ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.fratrie === n ? '#F0F4FF' : 'white', color: form.fratrie === n ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.fratrie === n ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        style={{ flex: 1, padding: '9px 4px', border: `2px solid ${form.fratrie === n ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.fratrie === n ? '#EAF2EC' : 'white', color: form.fratrie === n ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.fratrie === n ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                         {n}
                       </button>
                     ))}
@@ -1444,11 +1558,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 </div>
                 {/* Donations reçues */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous déjà reçu des donations de vos parents ou grands-parents ?</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous déjà reçu des donations de vos parents ou grands-parents ?</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {[['oui','Oui'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, donations_recues: val }))}
-                        style={{ flex: 1, padding: '10px', border: `2px solid ${form.donations_recues === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.donations_recues === val ? '#F0F4FF' : 'white', color: form.donations_recues === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.donations_recues === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        style={{ flex: 1, padding: '10px', border: `2px solid ${form.donations_recues === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.donations_recues === val ? '#EAF2EC' : 'white', color: form.donations_recues === val ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.donations_recues === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                         {lbl}
                       </button>
                     ))}
@@ -1459,14 +1573,14 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
             {formStep === 6 && form.focus === 'B' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour cibler l'audit sur votre transmission et la protection de vos proches.</p>
+                <p style={{ color: '#5C635E', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour cibler l'audit sur votre transmission et la protection de vos proches.</p>
                 {/* Testament */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous un testament ?</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous un testament ?</label>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {[['oui','Oui'],['non','Non'],['sais_pas','Je ne sais pas']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, testament: val }))}
-                        style={{ flex: 1, padding: '10px', border: `2px solid ${form.testament === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.testament === val ? '#F0F4FF' : 'white', color: form.testament === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.testament === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        style={{ flex: 1, padding: '10px', border: `2px solid ${form.testament === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.testament === val ? '#EAF2EC' : 'white', color: form.testament === val ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.testament === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                         {lbl}
                       </button>
                     ))}
@@ -1474,11 +1588,11 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 </div>
                 {/* Assurance-vie */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous une ou plusieurs assurances-vie ?</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Avez-vous une ou plusieurs assurances-vie ?</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {[['oui','Oui — bénéficiaires à jour'],['oui_maj','Oui — à mettre à jour / je ne sais pas'],['non','Non']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, av_existante: val }))}
-                        style={{ padding: '10px 16px', border: `2px solid ${form.av_existante === val ? '#C9A96E' : '#E5E7EB'}`, borderRadius: 8, background: form.av_existante === val ? '#FDF8F0' : 'white', color: form.av_existante === val ? '#C9A96E' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.av_existante === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
+                        style={{ padding: '10px 16px', border: `2px solid ${form.av_existante === val ? '#1F6B4A' : '#DDD8C9'}`, borderRadius: 8, background: form.av_existante === val ? '#E4EEE5' : 'white', color: form.av_existante === val ? '#1F6B4A' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.av_existante === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', textAlign: 'left', transition: 'all 0.15s' }}>
                         {lbl}
                       </button>
                     ))}
@@ -1486,13 +1600,13 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 </div>
                 {/* Types actifs */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Vos actifs principaux <span style={{ color: '#A8A8B8' }}>(plusieurs choix)</span></label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Vos actifs principaux <span style={{ color: '#8B948C' }}>(plusieurs choix)</span></label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {[['Résidence principale','🏠'],['Immobilier locatif','🏢'],['Épargne / financier','💰'],['Entreprise','⚙'],['Bien étranger','🌍']].map(([lbl, ico]) => {
                       const sel = (form.actifs_type || []).includes(lbl);
                       return (
                         <button key={lbl} onClick={() => setForm(p => ({ ...p, actifs_type: sel ? p.actifs_type.filter(x => x !== lbl) : [...(p.actifs_type||[]), lbl] }))}
-                          style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 20, background: sel ? '#F0F4FF' : 'white', color: sel ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          style={{ padding: '8px 14px', border: `2px solid ${sel ? '#1A201C' : '#DDD8C9'}`, borderRadius: 20, background: sel ? '#EAF2EC' : 'white', color: sel ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: sel ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                           {ico} {lbl}
                         </button>
                       );
@@ -1504,14 +1618,14 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
 
             {formStep === 6 && form.focus === 'C' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                <p style={{ color: '#7A7A8C', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour calibrer l'audit sur votre situation fiscale personnelle.</p>
+                <p style={{ color: '#5C635E', fontSize: 14, margin: 0, lineHeight: 1.6 }}>Pour calibrer l'audit sur votre situation fiscale personnelle.</p>
                 {/* Statut pro */}
                 <div>
-                  <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>Votre statut professionnel</label>
+                  <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>Votre statut professionnel</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {[['salarie','Salarié'],['tns','TNS / indépendant'],['dirigeant','Dirigeant de société'],['retraite','Retraité']].map(([val, lbl]) => (
                       <button key={val} onClick={() => setForm(p => ({ ...p, statut_pro: val }))}
-                        style={{ padding: '11px', border: `2px solid ${form.statut_pro === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.statut_pro === val ? '#F0F4FF' : 'white', color: form.statut_pro === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.statut_pro === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                        style={{ padding: '11px', border: `2px solid ${form.statut_pro === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.statut_pro === val ? '#EAF2EC' : 'white', color: form.statut_pro === val ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.statut_pro === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                         {lbl}
                       </button>
                     ))}
@@ -1520,22 +1634,22 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
                 {/* PER / PEA */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>PER ouvert ?</label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>PER ouvert ?</label>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {[['oui','Oui'],['non','Non']].map(([val, lbl]) => (
                         <button key={val} onClick={() => setForm(p => ({ ...p, per_ouvert: val }))}
-                          style={{ flex: 1, padding: '9px', border: `2px solid ${form.per_ouvert === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.per_ouvert === val ? '#F0F4FF' : 'white', color: form.per_ouvert === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.per_ouvert === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          style={{ flex: 1, padding: '9px', border: `2px solid ${form.per_ouvert === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.per_ouvert === val ? '#EAF2EC' : 'white', color: form.per_ouvert === val ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.per_ouvert === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                           {lbl}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label style={{ color: '#6B7280', fontSize: 13, display: 'block', marginBottom: 8 }}>PEA ouvert ?</label>
+                    <label style={{ color: '#4A544D', fontSize: 13, display: 'block', marginBottom: 8 }}>PEA ouvert ?</label>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {[['oui','Oui'],['non','Non']].map(([val, lbl]) => (
                         <button key={val} onClick={() => setForm(p => ({ ...p, pea_ouvert: val }))}
-                          style={{ flex: 1, padding: '9px', border: `2px solid ${form.pea_ouvert === val ? '#1B2B4B' : '#E5E7EB'}`, borderRadius: 8, background: form.pea_ouvert === val ? '#F0F4FF' : 'white', color: form.pea_ouvert === val ? '#1B2B4B' : '#6B7280', cursor: 'pointer', fontSize: 13, fontWeight: form.pea_ouvert === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
+                          style={{ flex: 1, padding: '9px', border: `2px solid ${form.pea_ouvert === val ? '#1A201C' : '#DDD8C9'}`, borderRadius: 8, background: form.pea_ouvert === val ? '#EAF2EC' : 'white', color: form.pea_ouvert === val ? '#1A201C' : '#4A544D', cursor: 'pointer', fontSize: 13, fontWeight: form.pea_ouvert === val ? 600 : 400, fontFamily: 'DM Sans, sans-serif', transition: 'all 0.15s' }}>
                           {lbl}
                         </button>
                       ))}
@@ -1549,18 +1663,18 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
             <div style={{ display: 'flex', gap: 10, marginTop: 28, alignItems: 'center' }}>
               {formStep > 1 && (
                 <button onClick={() => setFormStep(s => s - 1)}
-                  style={{ padding: '11px 18px', border: '1px solid #E5E7EB', borderRadius: 9, background: 'white', color: '#6B7280', cursor: 'pointer', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }}>
+                  style={{ padding: '11px 18px', border: '1px solid #DDD8C9', borderRadius: 9, background: 'white', color: '#4A544D', cursor: 'pointer', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }}>
                   ← Retour
                 </button>
               )}
               {formStep < totalSteps ? (
                 <button onClick={() => canAdvance() && setFormStep(s => s + 1)} disabled={!canAdvance()}
-                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: canAdvance() ? '#1B2B4B' : '#E5E7EB', color: canAdvance() ? 'white' : '#A8A8B8', cursor: canAdvance() ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
+                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: canAdvance() ? '#1A201C' : '#DDD8C9', color: canAdvance() ? 'white' : '#8B948C', cursor: canAdvance() ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
                   Suivant →
                 </button>
               ) : (
                 <button onClick={() => startWithForm(form)} disabled={loading}
-                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: !loading ? '#C9A96E' : '#E5E7EB', color: !loading ? 'white' : '#A8A8B8', cursor: !loading ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
+                  style={{ flex: 1, padding: '12px', border: 'none', borderRadius: 9, background: !loading ? '#1F6B4A' : '#DDD8C9', color: !loading ? 'white' : '#8B948C', cursor: !loading ? 'pointer' : 'default', fontSize: 15, fontWeight: 600, fontFamily: 'DM Sans, sans-serif' }}>
                   {loading ? '⏳ Démarrage…' : 'Lancer mon audit →'}
                 </button>
               )}
@@ -1572,12 +1686,12 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
         {/* ── BRANCHE 3 : CHAT ── */}
         {auditPhase === 'chat' && (
           <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 640 }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid #F5F0EA', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid #F6F4ED', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>N</div>
+                <ChouetteTete size={34} style={{ flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14, margin: 0 }}>Conseiller Nesso</p>
-                  <p style={{ color: '#10B981', fontSize: 11, margin: 0 }}>● En ligne</p>
+                  <p style={{ fontWeight: 600, color: '#1A201C', fontSize: 14, margin: 0 }}>Conseiller Nesso</p>
+                  <p style={{ color: '#1F8A5F', fontSize: 11, margin: 0 }}>● En ligne</p>
                 </div>
               </div>
             </div>
@@ -1586,18 +1700,18 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
               {messages.filter(m => !m.hidden).map((m, i) => (
                 <div key={i} className="fade-in" style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', gap: 8 }}>
                   {m.role === 'assistant' && (
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 2 }}>N</div>
+                    <ChouetteTete size={28} style={{ flexShrink: 0, marginTop: 2 }} />
                   )}
-                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#1A1A2E', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
+                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#1A201C' : '#FBFAF6', color: m.role === 'user' ? 'white' : '#1A201C', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
                     {renderText(m.content)}
                   </div>
                 </div>
               ))}
               {loading && (
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12 }}>N</div>
-                  <div style={{ background: '#F9FAFB', padding: '10px 14px', borderRadius: '3px 12px 12px 12px', display: 'flex', gap: 5 }}>
-                    {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#C9A96E', animation: `bounce 0.8s ${i*0.15}s infinite` }} />)}
+                  <ChouetteTete size={28} style={{ flexShrink: 0 }} />
+                  <div style={{ background: '#FBFAF6', padding: '10px 14px', borderRadius: '3px 12px 12px 12px', display: 'flex', gap: 5 }}>
+                    {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#1F6B4A', animation: `bounce 0.8s ${i*0.15}s infinite` }} />)}
                   </div>
                 </div>
               )}
@@ -1607,28 +1721,28 @@ export default function Onboarding({ onComplete, onLogin, onRetourDashboard }) {
             {messages.length > 1 && !loading && (
               <div style={{ paddingLeft: 14, paddingRight: 14, paddingTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 <button onClick={() => send('Je ne sais pas, passons à la suite')}
-                  style={{ background: 'none', border: '1px solid #E5E7EB', color: '#7A7A8C', borderRadius: 20, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                  style={{ background: 'none', border: '1px solid #DDD8C9', color: '#5C635E', borderRadius: 20, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
                   Passer cette question
                 </button>
               </div>
             )}
 
-            <div style={{ borderTop: '1px solid #F5F0EA', padding: 14, display: 'flex', gap: 9 }}>
+            <div style={{ borderTop: '1px solid #F6F4ED', padding: 14, display: 'flex', gap: 9 }}>
               <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
-                placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
+                placeholder="Répondez ici..." style={{ flex: 1, border: '1px solid #DDD8C9', borderRadius: 9, padding: '10px 14px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
               <button className="btn-navy" onClick={() => send()} disabled={loading || !input.trim()} style={{ padding: '10px 18px' }}>→</button>
             </div>
 
             {msgCount >= 6 && !updating && !loading && (
               <div style={{ padding: '0 14px 10px' }}>
-                <button onClick={handleMettreAJour} style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 600, background: '#1B2B4B', color: '#C9A96E', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
+                <button onClick={handleMettreAJour} style={{ width: '100%', padding: '12px', fontSize: 14, fontWeight: 600, background: '#1A201C', color: '#1F6B4A', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' }}>
                   {updating ? '⏳ Génération...' : '✦ Générer mon tableau de bord →'}
                 </button>
               </div>
             )}
 
             <div style={{ textAlign: 'center', paddingBottom: 12 }}>
-              <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#7A7A8C', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
+              <button onClick={handleNouvelleConversation} style={{ background: 'none', border: 'none', color: '#5C635E', cursor: 'pointer', fontSize: 12, fontFamily: 'DM Sans, sans-serif' }}>
                 Nouvelle conversation
               </button>
             </div>

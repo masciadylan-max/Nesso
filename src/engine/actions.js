@@ -2,28 +2,28 @@
 // Génère max 3 actions triées par urgence selon le profil utilisateur.
 
 import { euro } from '../utils.js';
-import { calcBaseIFI, calcTauxNuePropriete, calcDroitsBareme, computeFocusACalculs } from './calculs.js';
+import { calcBaseIFI, calcTauxNuePropriete, calcDroitsBareme, computeFocusACalculs, asArray } from './calculs.js';
 
 // ── Actions prioritaires — orientées par focus et alertes réelles ────────────
 export const generateUserActions = (userProfile, patrimoine) => {
   const actions   = [];
-  const alertes   = (userProfile?.alertes || []).map(a => a.toLowerCase());
+  const alertes   = asArray(userProfile?.alertes).map(a => String(a).toLowerCase());
   const focus     = userProfile?.focus_audit || 'les_deux';
   const situation = userProfile?.situation_civile || '';
   const nbEnfants = userProfile?.enfants || 0;
   const testamentExistant = userProfile?.succession?.testament_existant;
   const tmiNum    = parseInt(userProfile?.optimisation?.tmi) || 0;
   const revenus   = userProfile?.optimisation?.revenus_annuels_foyer || 0;
-  const dispositifs = userProfile?.optimisation?.dispositifs_en_place || [];
-  const perOuvert = dispositifs.some(d => d.toLowerCase().includes('per'));
-  const peaOuvert = dispositifs.some(d => d.toLowerCase().includes('pea'));
+  const dispositifs = asArray(userProfile?.optimisation?.dispositifs_en_place);
+  const perOuvert = dispositifs.some(d => typeof d === 'string' && d.toLowerCase().includes('per'));
+  const peaOuvert = dispositifs.some(d => typeof d === 'string' && d.toLowerCase().includes('pea'));
   const hasAV     = (userProfile?.actifs || []).some(a => a.type === 'Assurance-vie');
   const hasLocatif = (userProfile?.actifs || []).some(a => a.type === 'Bien locatif');
   const parentsEnVie   = userProfile?.parents_en_vie;
   const patrimoineParents = userProfile?.famille?.patrimoine_parents_estime || 0;
   const patrimoineGP   = userProfile?.famille?.patrimoine_gp_estime || 0;
   const gpVivants = userProfile?.famille?.gp_maternels_vivants || userProfile?.famille?.gp_paternels_vivants || userProfile?.succession?.grands_parents_vivants;
-  const fratrie   = userProfile?.famille?.fratrie || [];
+  const fratrie   = asArray(userProfile?.famille?.fratrie);
   // IFI : immo direct + SCI à prépondérance immobilière (source de vérité : calcBaseIFI)
   const patrimoineImmoNet = calcBaseIFI(userProfile?.actifs);
 
@@ -50,11 +50,22 @@ export const generateUserActions = (userProfile, patrimoine) => {
     // Saut de génération si GP vivants avec patrimoine significatif
     if (gpVivants && patrimoineGP > 100000) {
       const nbPetitsEnfants = 1 + fratrie.length;
-      // Économie = droits que les parents auraient payés sur l'héritage GP (double imposition)
-      //            moins droits de l'user en recevant directement des GP (abattement 31 786€/PE)
-      const droitsSansSaut = calcDroitsBareme(Math.max(0, Math.round(patrimoineGP / 2) - 100000)) * 2;
-      const droitsAvecSaut = calcDroitsBareme(Math.max(0, Math.round(patrimoineGP / nbPetitsEnfants) - 31786));
-      const economieSaut   = Math.max(0, droitsSansSaut - droitsAvecSaut);
+      // Économie du saut = éviter la double imposition sur la même valeur :
+      //   maillon 1 : droits GP → parents (abattement 100 000€/parent, 2 héritiers)
+      //   maillon 2 : la valeur GP (nette du maillon 1) retaxée dans la succession des parents
+      //   vs donation directe GP → petits-enfants (abattement 31 786€/petit-enfant)
+      const nbParentsVivants = userProfile?.famille?.nb_parents_en_vie ?? (parentsEnVie ? 1 : 0);
+      let economieSaut = 0;
+      if (nbParentsVivants > 0) {
+        const droitsMaillon1 = calcDroitsBareme(Math.max(0, Math.round(patrimoineGP / 2) - 100000)) * 2;
+        const gpNet          = Math.max(0, patrimoineGP - droitsMaillon1);
+        const abattEnfant    = 100000 * nbParentsVivants;
+        const droitsParentsSansGP = calcDroitsBareme(Math.max(0, Math.round(patrimoineParents / nbPetitsEnfants) - abattEnfant)) * nbPetitsEnfants;
+        const droitsParentsAvecGP = calcDroitsBareme(Math.max(0, Math.round((patrimoineParents + gpNet) / nbPetitsEnfants) - abattEnfant)) * nbPetitsEnfants;
+        const droitsMaillon2 = Math.max(0, droitsParentsAvecGP - droitsParentsSansGP);
+        const droitsAvecSaut = calcDroitsBareme(Math.max(0, Math.round(patrimoineGP / nbPetitsEnfants) - 31786)) * nbPetitsEnfants;
+        economieSaut = Math.max(0, droitsMaillon1 + droitsMaillon2 - droitsAvecSaut);
+      }
       actions.push({
         urgence: 'orange', titreGenerique: 'Saut de génération',
         titre: 'Étudier le saut de génération avec vos grands-parents',
@@ -88,8 +99,8 @@ export const generateUserActions = (userProfile, patrimoine) => {
     }
     // Rappel fiscal : donations passées approchant les 15 ans
     const now = new Date().getFullYear();
-    const donationsAnciennetes = (userProfile?.succession?.donations_passees || [])
-      .filter(d => d.annee && (now - d.annee) >= 10);
+    const donationsAnciennetes = asArray(userProfile?.succession?.donations_passees)
+      .filter(d => d && d.annee && (now - d.annee) >= 10);
     if (donationsAnciennetes.length > 0) {
       const annee = donationsAnciennetes[0].annee;
       actions.push({

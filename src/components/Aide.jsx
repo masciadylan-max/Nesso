@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { euro, getPersonne, getPatrimoine, getActifsByOwner } from '../utils.js';
+import { ChouetteTete } from './Chouette.jsx';
 
 const SUGGESTIONS = [
   'Que se passe-t-il si le grand-père décède demain ?',
@@ -63,10 +64,6 @@ export default function Aide({ pov, actifs }) {
 
   const send = async () => {
     if (!input.trim() || loading) return;
-    if (!apiKey) {
-      setError('Clé API non configurée. Cliquez sur ⚙ en haut à droite pour l\'ajouter.');
-      return;
-    }
     const userMsg = { role: 'user', content: input.trim() };
     const history = [...messages, userMsg];
     setMessages(history);
@@ -81,7 +78,9 @@ export default function Aide({ pov, actifs }) {
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || `Erreur ${res.status}`); }
       const data = await res.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.content[0].text }]);
+      const text = data.content?.[0]?.text;
+      if (!text) throw new Error('Réponse vide du modèle');
+      setMessages(prev => [...prev, { role: 'assistant', content: text }]);
     } catch (e) {
       setError(e.message.includes('fetch') ? 'Service temporairement indisponible.' : e.message);
     } finally { setLoading(false); }
@@ -90,17 +89,17 @@ export default function Aide({ pov, actifs }) {
   return (
     <div style={{ maxWidth: 780, margin: '0 auto', padding: '36px 24px 100px' }}>
       <div style={{ marginBottom: 24 }}>
-        <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Aide</p>
-        <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 30, margin: 0 }}>Votre conseiller Nesso</h1>
+        <p style={{ color: '#1F6B4A', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 6 }}>Aide</p>
+        <h1 className="font-serif" style={{ color: '#1A201C', fontSize: 30, margin: 0 }}>Votre conseiller Nesso</h1>
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 560 }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #F5F0EA', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 14 }}>N</div>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid #F6F4ED', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <ChouetteTete size={34} style={{ flexShrink: 0 }} />
           <div>
-            <p style={{ fontWeight: 600, color: '#1B2B4B', fontSize: 14, margin: 0 }}>Conseiller Nesso</p>
-            <p style={{ color: '#10B981', fontSize: 11, margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#10B981', display: 'inline-block' }} /> En ligne · Contexte : {person?.prenom}
+            <p style={{ fontWeight: 600, color: '#1A201C', fontSize: 14, margin: 0 }}>Conseiller Nesso</p>
+            <p style={{ color: '#1F8A5F', fontSize: 11, margin: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#1F8A5F', display: 'inline-block' }} /> En ligne · Contexte : {person?.prenom}
             </p>
           </div>
         </div>
@@ -109,24 +108,24 @@ export default function Aide({ pov, actifs }) {
           {messages.map((m, i) => (
             <div key={i} className="fade-in" style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-start', gap: 8 }}>
               {m.role === 'assistant' && (
-                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12, flexShrink: 0, marginTop: 2 }}>N</div>
+                <ChouetteTete size={28} style={{ flexShrink: 0, marginTop: 2 }} />
               )}
-              <div style={{ maxWidth: '78%', background: m.role === 'user' ? '#1B2B4B' : '#F9FAFB', color: m.role === 'user' ? 'white' : '#1A1A2E', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              <div style={{ maxWidth: '78%', background: m.role === 'user' ? '#1A201C' : '#FBFAF6', color: m.role === 'user' ? 'white' : '#1A201C', padding: '11px 15px', borderRadius: m.role === 'user' ? '12px 12px 3px 12px' : '3px 12px 12px 12px', fontSize: 14, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                 {m.content}
               </div>
             </div>
           ))}
           {loading && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#C9A96E', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 700, fontSize: 12 }}>N</div>
-              <div style={{ background: '#F9FAFB', padding: '10px 14px', borderRadius: '3px 12px 12px 12px', display: 'flex', gap: 5 }}>
-                {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#C9A96E', animation: `bounce 0.8s ${i*0.15}s infinite` }} />)}
+              <ChouetteTete size={28} style={{ flexShrink: 0 }} />
+              <div style={{ background: '#FBFAF6', padding: '10px 14px', borderRadius: '3px 12px 12px 12px', display: 'flex', gap: 5 }}>
+                {[0,1,2].map(i => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#1F6B4A', animation: `bounce 0.8s ${i*0.15}s infinite` }} />)}
               </div>
             </div>
           )}
           {error && (
-            <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 8, padding: 12 }}>
-              <p style={{ color: '#E24B4A', fontSize: 13, margin: 0 }}>⚠ {error}</p>
+            <div style={{ background: '#FAEDE7', border: '1px solid #E5A88F', borderRadius: 8, padding: 12 }}>
+              <p style={{ color: '#C2502F', fontSize: 13, margin: 0 }}>⚠ {error}</p>
             </div>
           )}
           <div ref={endRef} />
@@ -135,18 +134,18 @@ export default function Aide({ pov, actifs }) {
         {messages.length <= 1 && (
           <div style={{ padding: '0 20px 12px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
             {SUGGESTIONS.map((s, i) => (
-              <button key={i} onClick={() => setInput(s)} style={{ background: '#F5F0EA', border: '1px solid #E5D9C8', color: '#1B2B4B', borderRadius: 18, padding: '5px 13px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'background 0.15s' }}
-                onMouseEnter={e => e.target.style.background = '#EDE8E0'} onMouseLeave={e => e.target.style.background = '#F5F0EA'}>
+              <button key={i} onClick={() => setInput(s)} style={{ background: '#F6F4ED', border: '1px solid #E5D9C8', color: '#1A201C', borderRadius: 18, padding: '5px 13px', fontSize: 12, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', transition: 'background 0.15s' }}
+                onMouseEnter={e => e.target.style.background = '#EDE8E0'} onMouseLeave={e => e.target.style.background = '#F6F4ED'}>
                 {s}
               </button>
             ))}
           </div>
         )}
 
-        <div style={{ borderTop: '1px solid #F5F0EA', padding: 16, display: 'flex', gap: 10 }}>
+        <div style={{ borderTop: '1px solid #F6F4ED', padding: 16, display: 'flex', gap: 10 }}>
           <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
             placeholder="Posez votre question..."
-            style={{ flex: 1, border: '1px solid #E5E7EB', borderRadius: 10, padding: '11px 15px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
+            style={{ flex: 1, border: '1px solid #DDD8C9', borderRadius: 10, padding: '11px 15px', fontSize: 14, fontFamily: 'DM Sans, sans-serif' }} />
           <button className="btn-navy" onClick={send} disabled={loading || !input.trim()} style={{ padding: '11px 20px' }}>→</button>
         </div>
       </div>

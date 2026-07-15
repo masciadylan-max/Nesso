@@ -2,9 +2,9 @@ export default function Confidentialite() {
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '48px 24px 120px', fontFamily: 'DM Sans, sans-serif' }}>
 
-      <p style={{ color: '#C9A96E', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Légal</p>
-      <h1 className="font-serif" style={{ color: '#1B2B4B', fontSize: 32, fontWeight: 700, margin: '0 0 8px' }}>Politique de confidentialité</h1>
-      <p style={{ color: '#7A7A8C', fontSize: 13, marginBottom: 40 }}>Dernière mise à jour : mai 2026</p>
+      <p style={{ color: '#1F6B4A', fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 8 }}>Légal</p>
+      <h1 className="font-serif" style={{ color: '#1A201C', fontSize: 32, fontWeight: 700, margin: '0 0 8px' }}>Politique de confidentialité</h1>
+      <p style={{ color: '#5C635E', fontSize: 13, marginBottom: 40 }}>Dernière mise à jour : mai 2026</p>
 
       {[
         {
@@ -56,19 +56,19 @@ Pour toute demande relative à vos droits : contact@nesso.fr`,
         },
       ].map(({ titre, contenu }) => (
         <div key={titre} style={{ marginBottom: 36 }}>
-          <h2 style={{ color: '#1B2B4B', fontSize: 17, fontWeight: 600, margin: '0 0 12px', borderBottom: '1px solid #F0EBE4', paddingBottom: 10 }}>{titre}</h2>
+          <h2 style={{ color: '#1A201C', fontSize: 17, fontWeight: 600, margin: '0 0 12px', borderBottom: '1px solid #E3DFD3', paddingBottom: 10 }}>{titre}</h2>
           {contenu.split('\n\n').map((para, i) => (
-            <p key={i} style={{ color: '#4B5563', fontSize: 14, lineHeight: 1.8, margin: '0 0 12px' }}>{para}</p>
+            <p key={i} style={{ color: '#3F4842', fontSize: 14, lineHeight: 1.8, margin: '0 0 12px' }}>{para}</p>
           ))}
         </div>
       ))}
 
-      <div style={{ background: '#F5F0EA', borderRadius: 12, padding: 20, marginTop: 16 }}>
-        <p style={{ color: '#7A7A8C', fontSize: 13, margin: 0, lineHeight: 1.7 }}>
-          <strong style={{ color: '#1B2B4B' }}>Contact :</strong> contact@nesso.fr<br />
-          <strong style={{ color: '#1B2B4B' }}>Hébergeur frontend :</strong> Vercel Inc., 340 Pine Street, Suite 900, San Francisco, CA 94104, USA<br />
-          <strong style={{ color: '#1B2B4B' }}>Hébergeur base de données :</strong> Supabase Inc. / AWS eu-west-1 (Irlande)<br />
-          <strong style={{ color: '#1B2B4B' }}>IA :</strong> Anthropic, PBC — anthropic.com/privacy
+      <div style={{ background: '#F6F4ED', borderRadius: 12, padding: 20, marginTop: 16 }}>
+        <p style={{ color: '#5C635E', fontSize: 13, margin: 0, lineHeight: 1.7 }}>
+          <strong style={{ color: '#1A201C' }}>Contact :</strong> contact@nesso.fr<br />
+          <strong style={{ color: '#1A201C' }}>Hébergeur frontend :</strong> Vercel Inc., 340 Pine Street, Suite 900, San Francisco, CA 94104, USA<br />
+          <strong style={{ color: '#1A201C' }}>Hébergeur base de données :</strong> Supabase Inc. / AWS eu-west-1 (Irlande)<br />
+          <strong style={{ color: '#1A201C' }}>IA :</strong> Anthropic, PBC — anthropic.com/privacy
         </p>
       </div>
     </div>
